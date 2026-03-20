@@ -1,0 +1,57 @@
+{
+  "name": "moncom",
+  "version": "0.1.0",
+  "description": "MonCOM - Monitor Commander by Flarepoint",
+  "main": "dist/main/index.js",
+  "author": "Flarepoint",
+  "license": "MIT",
+  "scripts": {
+    "dev:renderer": "vite",
+    "dev:main": "node esbuild.main.mjs && electron .",
+    "dev": "concurrently -k \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main\"",
+    "build:renderer": "vite build",
+    "build:main": "node esbuild.main.mjs",
+    "build": "npm run build:renderer && npm run build:main",
+    "start": "npm run build && electron .",
+    "pack": "npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.flarepoint.moncom",
+    "productName": "MonCOM",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": [
+      "dist/**/*"
+    ]
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "electron": "^33.4.11",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.27.4",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.1",
+    "wait-on": "^9.0.4"
+  }
+}

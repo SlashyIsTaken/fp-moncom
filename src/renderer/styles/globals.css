@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/* ─── MonCOM Brand Tokens ─── */
+@theme {
+  --color-commander: #2A7FFF;
+  --color-commander-core: #5A9FFF;
+  --color-commander-glow: #3B8BFF;
+  --color-commander-deep: #0A3A8A;
+
+  --color-bg-dark: #0E1116;
+  --color-bg-surface: #151A22;
+  --color-bg-steel: #1C222B;
+  --color-bg-elevated: #232A36;
+
+  --color-text-primary: #E6E9EF;
+  --color-text-secondary: #9AA3AD;
+  --color-text-muted: #5C6370;
+
+  --color-border: #2A3140;
+  --color-border-active: #2A7FFF;
+
+  --color-success: #2AFF6E;
+  --color-warning: #FFB82A;
+  --color-danger: #FF2A2A;
+
+  --font-brand: 'Montserrat', 'Segoe UI', sans-serif;
+}
+
+/* ─── Base ─── */
+html, body, #root {
+  height: 100%;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--color-bg-dark);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-bg-steel); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+/* ─── Title bar drag ─── */
+.titlebar-drag { -webkit-app-region: drag; }
+.titlebar-no-drag { -webkit-app-region: no-drag; }
+
+/* ─── Brand font ─── */
+.font-brand { font-family: var(--font-brand); }
+
+/* ─── Glow effects ─── */
+.glow-commander {
+  box-shadow: 0 0 20px rgba(42, 127, 255, 0.15), 0 0 40px rgba(42, 127, 255, 0.05);
+}
+.glow-commander-strong {
+  box-shadow: 0 0 20px rgba(42, 127, 255, 0.3), 0 0 60px rgba(42, 127, 255, 0.1);
+}
+
+/* ─── Animations ─── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.25s ease-out; }
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(42, 127, 255, 0.15); }
+  50% { box-shadow: 0 0 30px rgba(42, 127, 255, 0.3); }
+}
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }

@@ -1,0 +1,75 @@
+/** Represents a physical monitor detected by the system */
+export interface MonitorInfo {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scaleFactor: number;
+  isPrimary: boolean;
+}
+
+/** A zone is a rectangular region within a monitor where content is displayed */
+export interface Zone {
+  id: string;
+  monitorId: string;
+  /** Position relative to the monitor's top-left (0-1 normalized) */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  content: ZoneContent | null;
+}
+
+/** Content that can be assigned to a zone */
+export interface ZoneContent {
+  type: 'url' | 'application';
+  /** URL to open or path to executable */
+  target: string;
+  /** Display name */
+  label: string;
+  /** Whether to open in kiosk/borderless mode */
+  kiosk?: boolean;
+}
+
+/** A layout defines how monitors are split into zones */
+export interface Layout {
+  id: string;
+  zones: Zone[];
+}
+
+/** A preset is a named, saveable configuration */
+export interface Preset {
+  id: string;
+  name: string;
+  icon?: string;
+  layout: Layout;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Application settings */
+export interface AppSettings {
+  theme: 'dark';
+  launchOnStartup: boolean;
+  minimizeToTray: boolean;
+  autoLaunchPreset: boolean;
+  autoLaunchPresetId: string | null;
+  hotkeys: Record<string, string>;
+}
+
+/** IPC channel names */
+export const IPC = {
+  GET_MONITORS: 'get-monitors',
+  APPLY_PRESET: 'apply-preset',
+  LAUNCH_ZONE: 'launch-zone',
+  CLOSE_ALL_ZONES: 'close-all-zones',
+  GET_PRESETS: 'get-presets',
+  SAVE_PRESET: 'save-preset',
+  DELETE_PRESET: 'delete-preset',
+  GET_SETTINGS: 'get-settings',
+  SAVE_SETTINGS: 'save-settings',
+  MOVE_WINDOW: 'move-window',
+  FIND_WINDOWS: 'find-windows',
+} as const;
