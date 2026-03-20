@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Monitor, Save, Trash2, Play, Globe, AppWindow, Grid2x2, Grid3x3, Columns2, Rows2, Check, FolderOpen } from 'lucide-react';
+import { Monitor, Save, Trash2, Play, Globe, AppWindow, Grid2x2, Grid3x3, Columns2, Rows2, Check, FolderOpen, Circle, Square, MousePointerClick, Keyboard, Type, X } from 'lucide-react';
 import { Tooltip } from '../components/Tooltip';
-import type { MonitorInfo, Zone, ZoneContent, Preset } from '../../shared/types';
+import type { MonitorInfo, Zone, ZoneContent, Preset, AutomationAction } from '../../shared/types';
 
 type SplitTemplate = {
   name: string;
@@ -256,6 +256,7 @@ export function LayoutEditorPage() {
             {selectedZoneData ? (
               <ZoneEditor
                 zone={selectedZoneData}
+                monitors={monitors}
                 onUpdate={(content) => updateZoneContent(selectedZoneData.id, content)}
                 onRemove={() => removeZone(selectedZoneData.id)}
               />
@@ -302,21 +303,49 @@ export function LayoutEditorPage() {
   );
 }
 
+/* ─── VK Code Display Names ─── */
+const VK_NAMES: Record<number, string> = {
+  8: 'Backspace', 9: 'Tab', 13: 'Enter', 16: 'Shift', 17: 'Ctrl', 18: 'Alt',
+  19: 'Pause', 20: 'CapsLock', 27: 'Esc', 32: 'Space', 33: 'PgUp',
+  34: 'PgDn', 35: 'End', 36: 'Home', 37: 'Left', 38: 'Up', 39: 'Right',
+  40: 'Down', 45: 'Ins', 46: 'Del',
+  112: 'F1', 113: 'F2', 114: 'F3', 115: 'F4', 116: 'F5', 117: 'F6',
+  118: 'F7', 119: 'F8', 120: 'F9', 121: 'F10', 122: 'F11', 123: 'F12',
+  91: 'Win', 160: 'LShift', 161: 'RShift', 162: 'LCtrl', 163: 'RCtrl',
+  164: 'LAlt', 165: 'RAlt', 186: ';', 187: '=', 188: ',', 189: '-',
+  190: '.', 191: '/', 192: '`', 219: '[', 220: '\\', 221: ']', 222: "'",
+};
+
+function vkName(vk: number): string {
+  if (VK_NAMES[vk]) return VK_NAMES[vk];
+  if (vk >= 65 && vk <= 90) return String.fromCharCode(vk);
+  if (vk >= 48 && vk <= 57) return String.fromCharCode(vk);
+  return `Key(${vk})`;
+}
+
+function formatDelay(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
 /* ─── Zone Editor ─── */
-function ZoneEditor({ zone, onUpdate, onRemove }: {
+function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
   zone: Zone;
+  monitors: MonitorInfo[];
   onUpdate: (content: ZoneContent | null) => void;
   onRemove: () => void;
 }) {
   const [type, setType] = useState<'url' | 'application'>(zone.content?.type || 'url');
   const [target, setTarget] = useState(zone.content?.target || '');
   const [label, setLabel] = useState(zone.content?.label || '');
+  const [actions, setActions] = useState<AutomationAction[]>(zone.content?.actions || []);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     setType(zone.content?.type || 'url');
     setTarget(zone.content?.target || '');
     setLabel(zone.content?.label || '');
+    setActions(zone.content?.actions || []);
     setShowAdvanced(!!zone.content?.label);
   }, [zone.id, zone.content]);
 
@@ -326,7 +355,6 @@ function ZoneEditor({ zone, onUpdate, onRemove }: {
     if (contentType === 'url') {
       try { return new URL(t).hostname.replace('www.', ''); } catch { return t; }
     }
-    // Extract filename from path
     const parts = t.replace(/\\/g, '/').split('/');
     return parts[parts.length - 1]?.replace(/\.exe$/i, '') || t;
   };
@@ -334,7 +362,18 @@ function ZoneEditor({ zone, onUpdate, onRemove }: {
   const handleApply = () => {
     if (!target.trim()) { onUpdate(null); return; }
     const displayLabel = label.trim() || autoLabel(target.trim(), type);
-    onUpdate({ type, target: target.trim(), label: displayLabel });
+    onUpdate({
+      type, target: target.trim(), label: displayLabel,
+      actions: actions.length > 0 ? actions : undefined,
+    });
+  };
+
+  const handleActionsChange = (newActions: AutomationAction[]) => {
+    setActions(newActions);
+    // Auto-save actions to zone content if content is already assigned
+    if (zone.content) {
+      onUpdate({ ...zone.content, actions: newActions.length > 0 ? newActions : undefined });
+    }
   };
 
   return (
@@ -347,7 +386,7 @@ function ZoneEditor({ zone, onUpdate, onRemove }: {
           return (
             <button
               key={t}
-              onClick={() => { setType(t); setTarget(''); setLabel(''); }}
+              onClick={() => { setType(t); setTarget(''); setLabel(''); setActions([]); }}
               className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-all
                 ${isActive
                   ? 'bg-commander/15 text-commander border border-commander/30'
@@ -443,6 +482,269 @@ function ZoneEditor({ zone, onUpdate, onRemove }: {
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* Automation section — only visible when content is assigned */}
+      {zone.content && (
+        <AutomationPanel
+          zone={zone}
+          monitors={monitors}
+          actions={actions}
+          onActionsChange={handleActionsChange}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─── Automation Panel ─── */
+function AutomationPanel({ zone, monitors, actions, onActionsChange }: {
+  zone: Zone;
+  monitors: MonitorInfo[];
+  actions: AutomationAction[];
+  onActionsChange: (actions: AutomationAction[]) => void;
+}) {
+  const [recording, setRecording] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [showActions, setShowActions] = useState(false);
+  const [showAddType, setShowAddType] = useState(false);
+  const [typeText, setTypeText] = useState('');
+  const [typeDelay, setTypeDelay] = useState('500');
+
+  const handleStartRecording = async () => {
+    // 3-second countdown to let user switch to target window
+    setCountdown(3);
+    for (let i = 3; i > 0; i--) {
+      setCountdown(i);
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    setCountdown(0);
+
+    const started = await window.moncom?.startRecording(zone, monitors);
+    if (started) {
+      setRecording(true);
+    }
+  };
+
+  const handleStopRecording = async () => {
+    const recorded = await window.moncom?.stopRecording();
+    setRecording(false);
+    if (recorded && recorded.length > 0) {
+      onActionsChange([...actions, ...recorded]);
+    }
+  };
+
+  const handlePlay = async () => {
+    if (actions.length === 0) return;
+    setPlaying(true);
+    try {
+      await window.moncom?.playActions(actions, zone, monitors);
+    } finally {
+      setPlaying(false);
+    }
+  };
+
+  const handleClear = () => {
+    onActionsChange([]);
+    setShowActions(false);
+  };
+
+  const handleRemoveAction = (index: number) => {
+    onActionsChange(actions.filter((_, i) => i !== index));
+  };
+
+  const handleAddTypeAction = () => {
+    if (!typeText.trim()) return;
+    const delay = parseInt(typeDelay) || 500;
+    onActionsChange([...actions, { type: 'type', text: typeText.trim(), delay }]);
+    setTypeText('');
+    setShowAddType(false);
+  };
+
+  const actionIcon = (action: AutomationAction) => {
+    switch (action.type) {
+      case 'click':
+      case 'right-click':
+        return <MousePointerClick className="w-3 h-3 text-commander" />;
+      case 'key':
+        return <Keyboard className="w-3 h-3 text-warning" />;
+      case 'type':
+        return <Type className="w-3 h-3 text-success" />;
+    }
+  };
+
+  const actionLabel = (action: AutomationAction) => {
+    switch (action.type) {
+      case 'click':
+        return `Click (${((action.x || 0) * 100).toFixed(0)}%, ${((action.y || 0) * 100).toFixed(0)}%)`;
+      case 'right-click':
+        return `Right-click (${((action.x || 0) * 100).toFixed(0)}%, ${((action.y || 0) * 100).toFixed(0)}%)`;
+      case 'key':
+        return `Key: ${vkName(action.vkCode || 0)}`;
+      case 'type':
+        return `Type: "${(action.text || '').length > 16 ? (action.text || '').slice(0, 16) + '...' : action.text}"`;
+    }
+  };
+
+  return (
+    <div className="border-t border-border pt-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <h4 className="text-[10px] text-text-muted uppercase tracking-widest font-medium">
+            Automation
+          </h4>
+          <Tooltip text="Record mouse clicks and keyboard input to replay automatically after this zone's content launches. Click Record, switch to the target window, perform your actions, then come back and click Stop." />
+        </div>
+        {actions.length > 0 && (
+          <span className="text-[10px] text-text-secondary">
+            {actions.length} action{actions.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
+      {/* Recording countdown overlay */}
+      {countdown > 0 && (
+        <div className="flex items-center justify-center gap-2 py-3 mb-3 bg-danger/10 border border-danger/30 rounded-lg">
+          <span className="text-sm font-medium text-danger">
+            Recording in {countdown}...
+          </span>
+        </div>
+      )}
+
+      {/* Record / Stop + Play / Clear buttons */}
+      <div className="flex gap-2">
+        {recording ? (
+          <button
+            onClick={handleStopRecording}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-danger/15 text-danger border border-danger/30 rounded-lg text-xs font-medium hover:bg-danger/25 transition-all"
+          >
+            <Square className="w-3 h-3 fill-current" />
+            Stop Recording
+          </button>
+        ) : (
+          <button
+            onClick={handleStartRecording}
+            disabled={countdown > 0}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-bg-dark border border-border rounded-lg text-xs font-medium text-text-secondary hover:border-danger/50 hover:text-danger transition-all disabled:opacity-40"
+          >
+            <Circle className="w-3 h-3 text-danger fill-danger" />
+            Record
+          </button>
+        )}
+        {actions.length > 0 && !recording && (
+          <>
+            <button
+              onClick={handlePlay}
+              disabled={playing}
+              className="px-3 py-2 bg-bg-dark border border-border rounded-lg text-text-muted hover:border-success/50 hover:text-success transition-all disabled:opacity-40"
+              title="Replay recorded actions"
+            >
+              <Play className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleClear}
+              className="px-3 py-2 bg-bg-dark border border-border rounded-lg text-text-muted hover:border-danger/50 hover:text-danger transition-all"
+              title="Clear all actions"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Recording indicator */}
+      {recording && (
+        <div className="flex items-center gap-2 mt-3 py-2 px-3 bg-danger/10 border border-danger/20 rounded-lg">
+          <div className="w-2 h-2 rounded-full bg-danger animate-pulse" />
+          <span className="text-[11px] text-danger font-medium">Recording... interact with target window</span>
+        </div>
+      )}
+
+      {/* Action list */}
+      {actions.length > 0 && !recording && (
+        <div className="mt-3">
+          <button
+            onClick={() => setShowActions(!showActions)}
+            className="text-[11px] text-text-muted hover:text-text-secondary transition-colors mb-2"
+          >
+            {showActions ? '- Hide actions' : '+ Show actions'}
+          </button>
+
+          {showActions && (
+            <div className="max-h-40 overflow-y-auto space-y-1 scrollbar-thin">
+              {actions.map((action, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-2.5 py-1.5 bg-bg-dark rounded-md group"
+                >
+                  {actionIcon(action)}
+                  <span className="flex-1 text-[11px] text-text-secondary truncate">
+                    {actionLabel(action)}
+                  </span>
+                  <span className="text-[10px] text-text-muted">
+                    {action.delay > 0 ? formatDelay(action.delay) : ''}
+                  </span>
+                  <button
+                    onClick={() => handleRemoveAction(i)}
+                    className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-danger transition-all"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Add Type action manually */}
+      {!recording && (
+        <div className="mt-2">
+          {showAddType ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={typeText}
+                  onChange={(e) => setTypeText(e.target.value)}
+                  placeholder="Text to type..."
+                  className="flex-1 min-w-0 px-3 py-2 bg-bg-dark border border-border rounded-lg text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-commander/60 transition-colors"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddTypeAction(); }}
+                />
+                <input
+                  type="number"
+                  value={typeDelay}
+                  onChange={(e) => setTypeDelay(e.target.value)}
+                  className="w-16 px-2 py-2 bg-bg-dark border border-border rounded-lg text-xs text-text-primary focus:outline-none focus:border-commander/60 transition-colors"
+                  title="Delay (ms)"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAddTypeAction}
+                  disabled={!typeText.trim()}
+                  className="flex-1 px-3 py-1.5 bg-commander/15 text-commander border border-commander/30 rounded-lg text-[11px] font-medium hover:bg-commander/25 transition-all disabled:opacity-40"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => { setShowAddType(false); setTypeText(''); }}
+                  className="px-3 py-1.5 bg-bg-dark border border-border rounded-lg text-[11px] text-text-muted hover:text-text-secondary transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddType(true)}
+              className="text-[11px] text-text-muted hover:text-text-secondary transition-colors"
+            >
+              + Add type action
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

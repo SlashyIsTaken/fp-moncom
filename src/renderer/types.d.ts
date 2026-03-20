@@ -1,4 +1,4 @@
-import type { MonitorInfo, Preset, AppSettings, Zone } from '../shared/types';
+import type { MonitorInfo, Preset, AppSettings, Zone, AutomationAction } from '../shared/types';
 
 export interface MonCOMAPI {
   getMonitors(): Promise<MonitorInfo[]>;
@@ -13,6 +13,9 @@ export interface MonCOMAPI {
   saveSettings(settings: AppSettings): Promise<AppSettings>;
   applyPreset(preset: Preset): Promise<boolean>;
   pickExecutable(): Promise<string | null>;
+  startRecording(zone: Zone, monitors: MonitorInfo[]): Promise<boolean>;
+  stopRecording(): Promise<AutomationAction[]>;
+  playActions(actions: AutomationAction[], zone: Zone, monitors: MonitorInfo[]): Promise<boolean>;
   windowMinimize(): void;
   windowMaximize(): void;
   windowClose(): void;

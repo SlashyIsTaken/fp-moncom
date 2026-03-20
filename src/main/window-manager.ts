@@ -3,6 +3,7 @@ import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import { IPC } from '../shared/types';
 import type { Zone, ZoneContent } from '../shared/types';
+import { playActions } from './automation-manager';
 
 const execAsync = promisify(exec);
 
@@ -338,6 +339,14 @@ async function launchZoneContent(zone: Zone, monitors: any[]): Promise<void> {
     launchURLZone(content.target, absX, absY, absW, absH);
   } else if (content.type === 'application') {
     await launchAppZone(content.target, content.label, absX, absY, absW, absH);
+  }
+
+  // Play automation actions if configured
+  if (content.actions && content.actions.length > 0) {
+    console.log(`[MonCOM] Playing ${content.actions.length} automation actions for zone`);
+    // Wait for content to settle before replaying actions
+    await new Promise(r => setTimeout(r, 1500));
+    await playActions(content.actions, zone, monitors);
   }
 }
 

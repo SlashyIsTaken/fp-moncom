@@ -22,6 +22,21 @@ export interface Zone {
   content: ZoneContent | null;
 }
 
+/** A recorded automation action to replay after zone content launches */
+export interface AutomationAction {
+  type: 'click' | 'right-click' | 'key' | 'type';
+  /** X position relative to zone (0-1), for click actions */
+  x?: number;
+  /** Y position relative to zone (0-1), for click actions */
+  y?: number;
+  /** Virtual key code, for key actions */
+  vkCode?: number;
+  /** Text to type, for type actions */
+  text?: string;
+  /** Delay in ms before this action executes */
+  delay: number;
+}
+
 /** Content that can be assigned to a zone */
 export interface ZoneContent {
   type: 'url' | 'application';
@@ -31,6 +46,8 @@ export interface ZoneContent {
   label: string;
   /** Whether to open in kiosk/borderless mode */
   kiosk?: boolean;
+  /** Recorded automation actions to replay after launch */
+  actions?: AutomationAction[];
 }
 
 /** A layout defines how monitors are split into zones */
@@ -72,4 +89,7 @@ export const IPC = {
   SAVE_SETTINGS: 'save-settings',
   MOVE_WINDOW: 'move-window',
   FIND_WINDOWS: 'find-windows',
+  START_RECORDING: 'start-recording',
+  STOP_RECORDING: 'stop-recording',
+  PLAY_ACTIONS: 'play-actions',
 } as const;

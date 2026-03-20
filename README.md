@@ -57,6 +57,15 @@ Each zone can be assigned either:
 - **A URL** — opens in a frameless, positioned browser window
 - **An application** — launches the executable and moves it into position
 
+### Action Recording & Playback
+After assigning content to a zone, you can record a click and keyboard sequence that MonCOM will replay automatically every time that zone launches. This is useful for:
+- Logging into a web dashboard
+- Clicking through a startup dialog
+- Navigating to a specific tab or view
+- Typing into search fields or forms
+
+Click **Record** in the Automation section of the zone editor, switch to the target window, perform your actions, then return to MonCOM and click **Stop**. Recorded actions include mouse clicks (left and right), keyboard input, and timing between each step. You can also manually add "type text" actions for entering text strings. All coordinates are stored relative to the zone so that sequences remain valid across resolution changes.
+
 ### Presets
 Save any layout as a named preset. Apply it later with a single click from the dashboard or presets page. MonCOM tracks how many zones each preset has and when it was created.
 
@@ -111,8 +120,19 @@ Click **Quick Apply** to launch all configured zones immediately. MonCOM positio
 ### 4. Save as a Preset
 Give your layout a name and click **Save Preset**. It now appears on the Dashboard and the Presets page for one-click access.
 
-### 5. Automate
-In **Settings**, enable **Launch on startup** and pick your preset under **Auto-launch preset**. Your entire workspace will be set up automatically every time Windows starts.
+### 5. Record Actions (Optional)
+With a zone selected that has content assigned, scroll down to the **Automation** section:
+
+1. Click **Record** — a 3-second countdown gives you time to switch to the target window.
+2. Interact with the launched content — click buttons, type text, navigate menus.
+3. Return to MonCOM and click **Stop Recording**.
+4. Your actions appear in a list. Use **Play** to test them, or **Clear** to start over.
+5. You can also manually add "type text" actions for entering text strings.
+
+Actions are saved with the preset and replay automatically after the zone content launches.
+
+### 6. Automate
+In **Settings**, enable **Launch on startup** and pick your preset under **Auto-launch preset**. Your entire workspace will be set up automatically every time Windows starts — including action sequences.
 
 ---
 

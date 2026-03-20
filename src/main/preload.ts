@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld('moncom', {
   // File picker
   pickExecutable: () => ipcRenderer.invoke('pick-executable'),
 
+  // Automation
+  startRecording: (zone: any, monitors: any) =>
+    ipcRenderer.invoke(IPC.START_RECORDING, zone, monitors),
+  stopRecording: () => ipcRenderer.invoke(IPC.STOP_RECORDING),
+  playActions: (actions: any, zone: any, monitors: any) =>
+    ipcRenderer.invoke(IPC.PLAY_ACTIONS, actions, zone, monitors),
+
   // Window controls
   windowMinimize: () => ipcRenderer.send('window-minimize'),
   windowMaximize: () => ipcRenderer.send('window-maximize'),

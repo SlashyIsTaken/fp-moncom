@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog } 
 import * as path from 'path';
 import { registerWindowHandlers, applyPresetFromMain } from './window-manager';
 import { registerPresetHandlers, loadSettings, loadPresets } from './preset-store';
+import { startRecording, stopRecording, playActions } from './automation-manager';
 import type { MonitorInfo } from '../shared/types';
 import { IPC } from '../shared/types';
 
@@ -111,6 +112,17 @@ app.whenReady().then(() => {
   // Register other IPC handlers
   registerWindowHandlers(ipcMain);
   registerPresetHandlers(ipcMain);
+
+  // Automation: recording & playback
+  ipcMain.handle(IPC.START_RECORDING, (_event, zone, monitors) => {
+    return startRecording(zone, monitors);
+  });
+  ipcMain.handle(IPC.STOP_RECORDING, () => {
+    return stopRecording();
+  });
+  ipcMain.handle(IPC.PLAY_ACTIONS, async (_event, actions, zone, monitors) => {
+    return playActions(actions, zone, monitors);
+  });
 
   // Auto-launch preset on startup
   try {
