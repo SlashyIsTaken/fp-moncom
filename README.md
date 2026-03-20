@@ -1,7 +1,7 @@
 <!-- Banner -->
 <p align="center">
   <!-- Replace the src below with your Flarepoint banner image -->
-  <img src="https://flarepoint.nl/images/banner.png" alt="MonCOM Banner" width="100%" />
+  <img src="https://flarepoint.nl/images/banner.png" alt="MonCOM Banner" width="75%" />
 </p>
 
 <h1 align="center">MonCOM — Monitor Commander</h1>
