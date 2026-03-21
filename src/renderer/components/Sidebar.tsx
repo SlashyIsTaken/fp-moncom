@@ -45,7 +45,7 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
           <Monitor className="w-3.5 h-3.5 text-text-muted" />
           <p className="font-brand text-[11px] text-text-muted tracking-wide">
             Mon<span className="font-bold">COM</span>
-            <span className="ml-1.5 text-text-muted/60">v0.1.0</span>
+            <span className="ml-1.5 text-text-muted/60">v{__APP_VERSION__}</span>
           </p>
         </div>
         <p className="text-[10px] text-text-muted/50 mt-1 ml-5.5">

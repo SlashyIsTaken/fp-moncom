@@ -22,6 +22,8 @@ export interface MonCOMAPI {
   windowClose(): void;
 }
 
+declare const __APP_VERSION__: string;
+
 declare global {
   interface Window {
     moncom: MonCOMAPI;

@@ -127,7 +127,7 @@ export function SettingsPage() {
         <h2 className="text-sm font-semibold text-text-primary mb-4">About</h2>
         <div className="space-y-2.5">
           <AboutRow label="Application" value="MonCOM — Monitor Commander" />
-          <AboutRow label="Version" value="0.1.0" />
+          <AboutRow label="Version" value={__APP_VERSION__} />
           <AboutRow label="Developer" value="Flarepoint" />
           <AboutRow label="Stack" value="Electron + React + TypeScript" />
         </div>
