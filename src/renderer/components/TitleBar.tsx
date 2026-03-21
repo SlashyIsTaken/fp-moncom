@@ -1,18 +1,27 @@
 import React from 'react';
-import { Monitor } from 'lucide-react';
+
+function LogoMark() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* 2x2 grid of rounded squares — echoes the layout/zone concept */}
+      <rect x="0.5" y="0.5" width="5.5" height="5.5" rx="1.2" fill="#2A7FFF" opacity="0.9" />
+      <rect x="8" y="0.5" width="5.5" height="5.5" rx="1.2" fill="#2A7FFF" opacity="0.5" />
+      <rect x="0.5" y="8" width="5.5" height="5.5" rx="1.2" fill="#2A7FFF" opacity="0.5" />
+      <rect x="8" y="8" width="5.5" height="5.5" rx="1.2" fill="#2A7FFF" opacity="0.25" />
+    </svg>
+  );
+}
 
 export function TitleBar() {
   return (
     <div className="titlebar-drag flex items-center justify-between h-8 bg-bg-surface border-b border-border pl-3 shrink-0">
       {/* Brand */}
-      <div className="flex items-center gap-2">
-        <Monitor className="w-3.5 h-3.5 text-commander" />
-        <span className="font-brand text-xs tracking-wide text-text-primary">
-          Mon<span className="font-extrabold text-commander">COM</span>
+      <div className="flex items-center gap-2.5">
+        <LogoMark />
+        <span className="font-brand text-[11px] font-semibold tracking-[0.15em] uppercase text-text-secondary">
+          Moncom
         </span>
-        <span className="text-[9px] text-text-muted/60 font-medium ml-0.5">
-          Monitor Commander
-        </span>
+        <span className="w-1.5 h-1.5 rounded-full bg-commander/60 shadow-[0_0_6px_rgba(42,127,255,0.4)]" />
       </div>
 
       {/* Windows-style window controls */}
