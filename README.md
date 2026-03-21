@@ -1,4 +1,4 @@
-<h1 align="center">MonCOM — Monitor Commander</h1>
+<h1 align="center">Flarepoint MonCOM | Monitor Commander</h1>
 
 <p align="center">
   <strong>Organize your monitors. Command your workspace.</strong>
