@@ -48,7 +48,7 @@ function createWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createEmpty();
+  const icon = nativeImage.createFromPath(path.join(__dirname, '../../build/icon.png'));
   tray = new Tray(icon);
   tray.setToolTip('MonCOM - Monitor Commander');
 
