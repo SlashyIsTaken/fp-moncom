@@ -21,6 +21,8 @@
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
 </p>
 
+> **Note:** MonCOM is currently in pre-release (v0.x). Features may be incomplete, unstable, or subject to change. Use at your own discretion.
+
 ---
 
 ## What is MonCOM?
