@@ -15,7 +15,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Windows-blue?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square&logo=electron" alt="Electron" />
+  <img src="https://img.shields.io/badge/node-%3E%3D20.19-339933?style=flat-square&logo=nodedotjs" alt="Node" />
+  <img src="https://img.shields.io/badge/electron-41-47848f?style=flat-square&logo=electron" alt="Electron" />
   <img src="https://img.shields.io/badge/react-19-61dafb?style=flat-square&logo=react" alt="React" />
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
 </p>
@@ -134,7 +135,7 @@ In **Settings**, enable **Launch on startup** and pick your preset under **Auto-
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 20 or later
+- [Node.js](https://nodejs.org/) 20.19+ or 22.12+
 - npm (bundled with Node.js)
 - Windows 10/11
 
@@ -228,7 +229,7 @@ fp-moncom/
 
 | Layer | Technology |
 |-------|-----------|
-| **Desktop Runtime** | Electron 33 |
+| **Desktop Runtime** | Electron 41 |
 | **UI** | React 19, TypeScript 5.9, Tailwind CSS 4 |
 | **Bundling** | Vite 8 (renderer), esbuild (main process) |
 | **Persistence** | electron-store (JSON-based, per-user) |
