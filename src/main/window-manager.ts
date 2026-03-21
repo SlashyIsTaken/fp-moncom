@@ -343,9 +343,14 @@ async function launchZoneContent(zone: Zone, monitors: any[]): Promise<void> {
 
   // Play automation actions if configured
   if (content.actions && content.actions.length > 0) {
-    console.log(`[MonCOM] Playing ${content.actions.length} automation actions for zone`);
-    // Wait for content to settle before replaying actions
+    // Wait for content to load, then add any configured extra buffer
     await new Promise(r => setTimeout(r, 1500));
+    const extraDelay = content.launchDelay ?? 0;
+    if (extraDelay > 0) {
+      console.log(`[MonCOM] Waiting extra ${extraDelay}ms buffer for content to settle`);
+      await new Promise(r => setTimeout(r, extraDelay));
+    }
+    console.log(`[MonCOM] Playing ${content.actions.length} automation actions`);
     await playActions(content.actions, zone, monitors);
   }
 }

@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('moncom', {
   getMonitors: () => ipcRenderer.invoke(IPC.GET_MONITORS),
 
   // Window management
-  launchZone: (zone: any) => ipcRenderer.invoke(IPC.LAUNCH_ZONE, zone),
+  launchZone: (zone: any, monitors: any) => ipcRenderer.invoke(IPC.LAUNCH_ZONE, zone, monitors),
   moveWindow: (windowTitle: string, x: number, y: number, w: number, h: number) =>
     ipcRenderer.invoke(IPC.MOVE_WINDOW, windowTitle, x, y, w, h),
   closeAllZones: () => ipcRenderer.invoke(IPC.CLOSE_ALL_ZONES),

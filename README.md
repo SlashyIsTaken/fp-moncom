@@ -59,7 +59,7 @@ After assigning content to a zone, you can record a click and keyboard sequence 
 - Navigating to a specific tab or view
 - Typing into search fields or forms
 
-Click **Record** in the Automation section of the zone editor, switch to the target window, perform your actions, then return to MonCOM and click **Stop**. Recorded actions include mouse clicks (left and right), keyboard input, and timing between each step. You can also manually add "type text" actions for entering text strings. All coordinates are stored relative to the zone so that sequences remain valid across resolution changes.
+Click **Record** in the Automation section of the zone editor. MonCOM will close any active zone windows, run a countdown, then launch the zone's content — so the real startup time is naturally captured. Once the content is loaded and recording begins, switch to the launched window and perform your actions, then return to MonCOM and click **Stop** — the stop click itself is not captured. If the content needs extra time to settle, you can add a **launch delay** buffer (default 0 ms) per zone. Recorded actions include mouse clicks (left and right), keyboard input, and timing between each step. You can also manually add "type text" actions for entering text strings. All coordinates are stored relative to the zone so that sequences remain valid across resolution changes.
 
 ### Presets
 Save any layout as a named preset. Apply it later with a single click from the dashboard or presets page. MonCOM tracks how many zones each preset has and when it was created.
@@ -118,11 +118,12 @@ Give your layout a name and click **Save Preset**. It now appears on the Dashboa
 ### 5. Record Actions (Optional)
 With a zone selected that has content assigned, scroll down to the **Automation** section:
 
-1. Click **Record** — a 3-second countdown gives you time to switch to the target window.
-2. Interact with the launched content — click buttons, type text, navigate menus.
-3. Return to MonCOM and click **Stop Recording**.
-4. Your actions appear in a list. Use **Play** to test them, or **Clear** to start over.
-5. You can also manually add "type text" actions for entering text strings.
+1. Click **Record** — MonCOM closes any active zone windows and starts a 3-second countdown.
+2. After the countdown, the zone's content launches so the real startup delay is captured.
+3. Interact with the launched content — click buttons, type text, navigate menus.
+4. Return to MonCOM and click **Stop Recording** — the stop click is automatically excluded.
+5. Your actions appear in a list. Use **Play** to test them, or **Clear** to start over.
+6. You can also manually add "type text" actions for entering text strings.
 
 Actions are saved with the preset and replay automatically after the zone content launches.
 

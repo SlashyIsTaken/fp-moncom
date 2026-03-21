@@ -364,6 +364,7 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
     const displayLabel = label.trim() || autoLabel(target.trim(), type);
     onUpdate({
       type, target: target.trim(), label: displayLabel,
+      launchDelay: zone.content?.launchDelay,
       actions: actions.length > 0 ? actions : undefined,
     });
   };
@@ -373,6 +374,12 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
     // Auto-save actions to zone content if content is already assigned
     if (zone.content) {
       onUpdate({ ...zone.content, actions: newActions.length > 0 ? newActions : undefined });
+    }
+  };
+
+  const handleLaunchDelayChange = (delay: number) => {
+    if (zone.content) {
+      onUpdate({ ...zone.content, launchDelay: delay > 0 ? delay : undefined });
     }
   };
 
@@ -490,6 +497,7 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
           monitors={monitors}
           actions={actions}
           onActionsChange={handleActionsChange}
+          onLaunchDelayChange={handleLaunchDelayChange}
         />
       )}
     </div>
@@ -497,11 +505,12 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
 }
 
 /* ─── Automation Panel ─── */
-function AutomationPanel({ zone, monitors, actions, onActionsChange }: {
+function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDelayChange }: {
   zone: Zone;
   monitors: MonitorInfo[];
   actions: AutomationAction[];
   onActionsChange: (actions: AutomationAction[]) => void;
+  onLaunchDelayChange: (delay: number) => void;
 }) {
   const [recording, setRecording] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -511,14 +520,32 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange }: {
   const [typeText, setTypeText] = useState('');
   const [typeDelay, setTypeDelay] = useState('500');
 
+  const [launching, setLaunching] = useState(false);
+  const launchDelay = zone.content?.launchDelay ?? 0;
+
   const handleStartRecording = async () => {
-    // 3-second countdown to let user switch to target window
+    if (!zone.content) return;
+
+    // Close any existing zone windows first
+    await window.moncom?.closeAllZones();
+
+    // Countdown first — gives user time to prepare
     setCountdown(3);
     for (let i = 3; i > 0; i--) {
       setCountdown(i);
       await new Promise(r => setTimeout(r, 1000));
     }
     setCountdown(0);
+
+    // Launch content after countdown — the real startup delay is naturally captured
+    setLaunching(true);
+    await window.moncom?.launchZone(zone, monitors);
+
+    // Small configurable buffer for extra startup time
+    if (launchDelay > 0) {
+      await new Promise(r => setTimeout(r, launchDelay));
+    }
+    setLaunching(false);
 
     const started = await window.moncom?.startRecording(zone, monitors);
     if (started) {
@@ -593,7 +620,7 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange }: {
           <h4 className="text-[10px] text-text-muted uppercase tracking-widest font-medium">
             Automation
           </h4>
-          <Tooltip text="Record mouse clicks and keyboard input to replay automatically after this zone's content launches. Click Record, switch to the target window, perform your actions, then come back and click Stop." />
+          <Tooltip text="Record mouse clicks and keyboard input to replay automatically after this zone's content launches. Clicking Record starts a countdown, then launches the zone's content so the real startup time is captured. Use the launch delay to add extra buffer if the content needs more time. Switch to the launched window, perform your actions, then come back and click Stop." />
         </div>
         {actions.length > 0 && (
           <span className="text-[10px] text-text-secondary">
@@ -602,7 +629,29 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange }: {
         )}
       </div>
 
-      {/* Recording countdown overlay */}
+      {/* Launch delay setting */}
+      <div className="flex items-center gap-2 mb-3">
+        <label className="text-[11px] text-text-secondary whitespace-nowrap">Launch delay</label>
+        <input
+          type="number"
+          min={0}
+          step={500}
+          value={launchDelay}
+          onChange={(e) => onLaunchDelayChange(Math.max(0, parseInt(e.target.value) || 0))}
+          className="w-20 px-2 py-1 bg-bg-dark border border-border rounded-md text-xs text-text-primary focus:outline-none focus:border-commander/60 transition-colors"
+        />
+        <span className="text-[10px] text-text-muted">ms</span>
+        <Tooltip text="Extra buffer after content launches before automation plays. The real startup time is already accounted for — increase this only if the content needs additional time to settle." />
+      </div>
+
+      {/* Launch / countdown overlay */}
+      {launching && (
+        <div className="flex items-center justify-center gap-2 py-3 mb-3 bg-commander/10 border border-commander/30 rounded-lg">
+          <span className="text-sm font-medium text-commander">
+            Launching zone content...
+          </span>
+        </div>
+      )}
       {countdown > 0 && (
         <div className="flex items-center justify-center gap-2 py-3 mb-3 bg-danger/10 border border-danger/30 rounded-lg">
           <span className="text-sm font-medium text-danger">
@@ -624,7 +673,7 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange }: {
         ) : (
           <button
             onClick={handleStartRecording}
-            disabled={countdown > 0}
+            disabled={countdown > 0 || launching}
             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-bg-dark border border-border rounded-lg text-xs font-medium text-text-secondary hover:border-danger/50 hover:text-danger transition-all disabled:opacity-40"
           >
             <Circle className="w-3 h-3 text-danger fill-danger" />
@@ -656,7 +705,7 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange }: {
       {recording && (
         <div className="flex items-center gap-2 mt-3 py-2 px-3 bg-danger/10 border border-danger/20 rounded-lg">
           <div className="w-2 h-2 rounded-full bg-danger animate-pulse" />
-          <span className="text-[11px] text-danger font-medium">Recording... interact with target window</span>
+          <span className="text-[11px] text-danger font-medium">Recording... interact with target window, then click Stop</span>
         </div>
       )}
 

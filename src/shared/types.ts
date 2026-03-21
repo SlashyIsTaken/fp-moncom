@@ -46,6 +46,8 @@ export interface ZoneContent {
   label: string;
   /** Whether to open in kiosk/borderless mode */
   kiosk?: boolean;
+  /** Extra delay in ms to wait after content launches before playing automation (default 0) */
+  launchDelay?: number;
   /** Recorded automation actions to replay after launch */
   actions?: AutomationAction[];
 }

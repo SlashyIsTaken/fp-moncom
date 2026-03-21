@@ -378,6 +378,15 @@ export function stopRecording(): AutomationAction[] {
 
   const actions = [...recordedActions];
   recordedActions = [];
+
+  // Drop the last action if it's a click — that's the user clicking "Stop Recording"
+  if (actions.length > 0) {
+    const last = actions[actions.length - 1];
+    if (last.type === 'click' || last.type === 'right-click') {
+      actions.pop();
+    }
+  }
+
   console.log(`[MonCOM] Recording stopped, captured ${actions.length} actions`);
   return actions;
 }
