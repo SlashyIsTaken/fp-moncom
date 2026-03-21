@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, nativeImage, dialog } from 'electron';
 import * as path from 'path';
 import { registerWindowHandlers, applyPresetFromMain } from './window-manager';
 import { registerPresetHandlers, loadSettings, loadPresets } from './preset-store';
@@ -92,6 +92,11 @@ app.whenReady().then(() => {
     else mainWindow?.maximize();
   });
   ipcMain.on('window-close', () => mainWindow?.hide());
+
+  // Open external URLs in default browser
+  ipcMain.handle('open-external', (_event, url: string) => {
+    if (url.startsWith('https://')) return shell.openExternal(url);
+  });
 
   // File picker for selecting executables
   ipcMain.handle('pick-executable', async () => {

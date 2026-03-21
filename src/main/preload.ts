@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('moncom', {
   playActions: (actions: any, zone: any, monitors: any) =>
     ipcRenderer.invoke(IPC.PLAY_ACTIONS, actions, zone, monitors),
 
+  // Shell
+  openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
+
   // Window controls
   windowMinimize: () => ipcRenderer.send('window-minimize'),
   windowMaximize: () => ipcRenderer.send('window-maximize'),

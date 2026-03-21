@@ -49,7 +49,14 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
           </p>
         </div>
         <p className="text-[10px] text-text-muted/50 mt-1 ml-5.5">
-          by Flarepoint
+          by{' '}
+          <a
+            href="#"
+            onClick={(e) => { e.preventDefault(); window.moncom?.openExternal('https://flarepoint.nl'); }}
+            className="transition-colors hover:text-danger cursor-pointer"
+          >
+            Flarepoint
+          </a>
         </p>
       </div>
     </aside>
