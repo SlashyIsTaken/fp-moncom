@@ -156,15 +156,6 @@ export function SettingsPage() {
         )}
       </section>
 
-      {/* About */}
-      <section className="bg-bg-surface border border-border rounded-xl p-6 mb-8">
-        <h2 className="text-sm font-semibold text-text-primary mb-4">About</h2>
-        <div className="flex items-baseline gap-3">
-          <span className="text-sm text-text-secondary">MonCOM v{__APP_VERSION__}</span>
-          <span className="text-xs text-text-muted">by Flarepoint</span>
-        </div>
-      </section>
-
       {/* Auto-save indicator */}
       <div className={`text-xs text-text-muted transition-opacity ${saved ? 'opacity-100' : 'opacity-0'}`}>
         Settings saved automatically
