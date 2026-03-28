@@ -38,6 +38,12 @@ contextBridge.exposeInMainWorld('moncom', {
   checkElevation: (exePath: string) => ipcRenderer.invoke(IPC.CHECK_ELEVATION, exePath),
   isElevated: () => ipcRenderer.invoke(IPC.IS_ELEVATED),
 
+  // Monitor identification
+  identifyMonitor: (monitor: any, index: number) => ipcRenderer.invoke(IPC.IDENTIFY_MONITOR, monitor, index),
+
+  // Launched windows
+  hasLaunchedWindows: () => ipcRenderer.invoke(IPC.HAS_LAUNCHED_WINDOWS),
+
   // Shell
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
 

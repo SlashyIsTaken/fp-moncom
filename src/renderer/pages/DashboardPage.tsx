@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Monitor, Play, Square, Zap, LayoutGrid, Bookmark, ArrowRight } from 'lucide-react';
-import { Tooltip } from '../components/Tooltip';
 import type { MonitorInfo, Preset } from '../../shared/types';
 import type { Page } from '../App';
 
@@ -13,10 +12,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [isApplying, setIsApplying] = useState(false);
+  const [hasLaunched, setHasLaunched] = useState(false);
 
   useEffect(() => {
     window.moncom?.getMonitors().then(setMonitors);
     window.moncom?.getPresets().then(setPresets);
+    window.moncom?.hasLaunchedWindows().then(setHasLaunched);
   }, []);
 
   const handleApplyPreset = async (preset: Preset) => {
@@ -24,6 +25,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     setActivePreset(preset.id);
     try {
       await window.moncom?.applyPreset(preset);
+      setHasLaunched(true);
     } catch (e) {
       console.error('Failed to apply preset:', e);
     }
@@ -33,6 +35,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const handleCloseAll = async () => {
     await window.moncom?.closeAllZones();
     setActivePreset(null);
+    setHasLaunched(false);
+  };
+
+  const handleIdentifyMonitor = (monitor: MonitorInfo, index: number) => {
+    window.moncom?.identifyMonitor(monitor, index);
   };
 
   return (
@@ -51,10 +58,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       <section className="mb-10">
         <SectionHeader title="Detected Monitors" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-          {monitors.map((m) => (
-            <div
+          {monitors.map((m, i) => (
+            <button
               key={m.id}
-              className="bg-bg-surface border border-border rounded-xl p-5 hover:border-commander/40 transition-all group"
+              onClick={() => handleIdentifyMonitor(m, i + 1)}
+              className="text-left bg-bg-surface border border-border rounded-xl p-5 hover:border-commander/40 transition-all group cursor-pointer"
             >
               <div className="flex items-start gap-4">
                 <div className="w-11 h-11 rounded-lg bg-commander/10 flex items-center justify-center shrink-0 group-hover:bg-commander/15 transition-colors">
@@ -74,7 +82,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                   </div>
                 </div>
               </div>
-            </div>
+            </button>
           ))}
 
           {monitors.length === 0 && (
@@ -88,10 +96,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
       {/* Quick Actions */}
       <section className="mb-10">
-        <div className="flex items-center gap-2">
-          <SectionHeader title="Quick Actions" />
-          <Tooltip text="Shortcuts for common operations. 'Close All' only closes windows that MonCOM launched." />
-        </div>
+        <SectionHeader title="Quick Actions" />
         <div className="flex gap-3 flex-wrap mt-4">
           <ActionButton
             icon={LayoutGrid}
@@ -99,12 +104,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             primary
             onClick={() => onNavigate('editor')}
           />
-          <ActionButton
-            icon={Square}
-            label="Close All Windows"
-            danger
-            onClick={handleCloseAll}
-          />
+          {hasLaunched && (
+            <ActionButton
+              icon={Square}
+              label="Close Launched Windows"
+              danger
+              onClick={handleCloseAll}
+            />
+          )}
           <ActionButton
             icon={Zap}
             label="Refresh Monitors"

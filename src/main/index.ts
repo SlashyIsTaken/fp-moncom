@@ -53,6 +53,44 @@ async function checkExeRequiresElevation(exePath: string): Promise<boolean> {
   });
 }
 
+/**
+ * Show a brief identification overlay on a monitor.
+ */
+function identifyMonitor(monitor: MonitorInfo, index: number): void {
+  const overlay = new BrowserWindow({
+    x: monitor.x,
+    y: monitor.y,
+    width: monitor.width,
+    height: monitor.height,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: false,
+    resizable: false,
+    webPreferences: { contextIsolation: true },
+  });
+
+  overlay.setIgnoreMouseEvents(true);
+
+  const html = `
+    <html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:rgba(14,17,22,0.85);font-family:system-ui,sans-serif;">
+      <div style="text-align:center;animation:fadeIn 0.2s ease-out">
+        <div style="font-size:120px;font-weight:800;color:#2A7FFF;line-height:1">${index}</div>
+        <div style="font-size:22px;color:#8B949E;margin-top:12px">${monitor.name}</div>
+        <div style="font-size:16px;color:#484F58;margin-top:6px">${monitor.width} × ${monitor.height}</div>
+      </div>
+      <style>@keyframes fadeIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}</style>
+    </body></html>
+  `;
+
+  overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+
+  setTimeout(() => {
+    if (!overlay.isDestroyed()) overlay.close();
+  }, 2000);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -177,6 +215,11 @@ app.whenReady().then(() => {
   });
   ipcMain.handle(IPC.IS_ELEVATED, () => {
     return isProcessElevated();
+  });
+
+  // Monitor identification
+  ipcMain.handle(IPC.IDENTIFY_MONITOR, (_event, monitor: MonitorInfo, index: number) => {
+    identifyMonitor(monitor, index);
   });
 
   // Auto-launch preset on startup

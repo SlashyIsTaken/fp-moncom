@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Save, Check, ChevronDown, ShieldAlert } from 'lucide-react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { ChevronDown, ShieldAlert } from 'lucide-react';
 import { Tooltip } from '../components/Tooltip';
 import type { AppSettings, Preset } from '../../shared/types';
 
@@ -15,22 +15,28 @@ export function SettingsPage() {
   });
   const [presets, setPresets] = useState<Preset[]>([]);
   const [saved, setSaved] = useState(false);
+  const loaded = useRef(false);
 
   useEffect(() => {
-    window.moncom?.getSettings().then(setSettings);
+    window.moncom?.getSettings().then((s) => { setSettings(s); loaded.current = true; });
     window.moncom?.getPresets().then(setPresets);
   }, []);
 
-  const handleSave = async () => {
-    // If auto-launch is off, clear the preset selection
+  // Auto-save whenever settings change (skip the initial load)
+  const saveSettings = useCallback(async (s: AppSettings) => {
     const toSave = {
-      ...settings,
-      autoLaunchPresetId: settings.autoLaunchPreset ? settings.autoLaunchPresetId : null,
+      ...s,
+      autoLaunchPresetId: s.autoLaunchPreset ? s.autoLaunchPresetId : null,
     };
     await window.moncom?.saveSettings(toSave);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!loaded.current) return;
+    saveSettings(settings);
+  }, [settings, saveSettings]);
 
   const toggle = (key: 'launchOnStartup' | 'minimizeToTray' | 'autoLaunchPreset' | 'runAsAdmin') => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
@@ -51,7 +57,7 @@ export function SettingsPage() {
       </div>
 
       {/* General */}
-      <section className="bg-bg-surface border border-border rounded-xl overflow-hidden mb-6">
+      <section className="bg-bg-surface border border-border rounded-xl mb-6">
         <div className="px-6 py-4 border-b border-border">
           <h2 className="text-sm font-semibold text-text-primary">General</h2>
         </div>
@@ -73,7 +79,7 @@ export function SettingsPage() {
       </section>
 
       {/* Elevated Launch */}
-      <section className="bg-bg-surface border border-border rounded-xl overflow-hidden mb-6">
+      <section className="bg-bg-surface border border-border rounded-xl mb-6">
         <div className="px-6 py-4 border-b border-border flex items-center gap-2">
           <h2 className="text-sm font-semibold text-text-primary">Administrator Privileges</h2>
           <Tooltip text="Only enable this if you need to launch applications that require administrator privileges. When enabled, MonCOM must be started as administrator for elevated apps to launch correctly." />
@@ -100,7 +106,7 @@ export function SettingsPage() {
       </section>
 
       {/* Auto-launch */}
-      <section className="bg-bg-surface border border-border rounded-xl overflow-hidden mb-6">
+      <section className="bg-bg-surface border border-border rounded-xl mb-6">
         <div className="px-6 py-4 border-b border-border flex items-center gap-2">
           <h2 className="text-sm font-semibold text-text-primary">Auto-launch Preset</h2>
           <Tooltip text="When enabled, MonCOM will automatically apply your chosen preset when the app starts. Combine with 'Launch on startup' to have your monitors configured automatically after every boot." />
@@ -153,25 +159,16 @@ export function SettingsPage() {
       {/* About */}
       <section className="bg-bg-surface border border-border rounded-xl p-6 mb-8">
         <h2 className="text-sm font-semibold text-text-primary mb-4">About</h2>
-        <div className="space-y-2.5">
-          <AboutRow label="Application" value="MonCOM — Monitor Commander" />
-          <AboutRow label="Version" value={__APP_VERSION__} />
-          <AboutRow label="Developer" value="Flarepoint" />
-          <AboutRow label="Stack" value="Electron + React + TypeScript" />
+        <div className="flex items-baseline gap-3">
+          <span className="text-sm text-text-secondary">MonCOM v{__APP_VERSION__}</span>
+          <span className="text-xs text-text-muted">by Flarepoint</span>
         </div>
       </section>
 
-      {/* Save */}
-      <button
-        onClick={handleSave}
-        className="flex items-center gap-2.5 px-6 py-3 bg-commander text-white rounded-lg hover:bg-commander-core transition-colors text-sm font-medium"
-      >
-        {saved ? (
-          <><Check className="w-4 h-4" /> Settings Saved!</>
-        ) : (
-          <><Save className="w-4 h-4" /> Save Settings</>
-        )}
-      </button>
+      {/* Auto-save indicator */}
+      <div className={`text-xs text-text-muted transition-opacity ${saved ? 'opacity-100' : 'opacity-0'}`}>
+        Settings saved automatically
+      </div>
     </div>
   );
 }
@@ -205,11 +202,3 @@ function SettingRow({ title, description, checked, onChange, last }: {
   );
 }
 
-function AboutRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline gap-3">
-      <span className="text-xs text-text-muted w-24 shrink-0">{label}</span>
-      <span className="text-sm text-text-secondary">{value}</span>
-    </div>
-  );
-}

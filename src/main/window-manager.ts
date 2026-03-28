@@ -404,6 +404,11 @@ async function findWindows(): Promise<{ title: string; pid: number }[]> {
   }
 }
 
+function hasLaunchedWindows(): boolean {
+  const hasElectronWindows = launchedWindows.some(w => !w.isDestroyed());
+  return hasElectronWindows || launchedAppPIDs.size > 0;
+}
+
 export function registerWindowHandlers(ipcMain: IpcMain) {
   ipcMain.handle(IPC.LAUNCH_ZONE, async (_event, zone: Zone, monitors: any[]) => {
     await launchZoneContent(zone, monitors);
@@ -425,6 +430,10 @@ export function registerWindowHandlers(ipcMain: IpcMain) {
 
   ipcMain.handle(IPC.APPLY_PRESET, async (_event, preset: any) => {
     return applyPresetFromMain(preset, screen);
+  });
+
+  ipcMain.handle(IPC.HAS_LAUNCHED_WINDOWS, () => {
+    return hasLaunchedWindows();
   });
 }
 

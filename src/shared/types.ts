@@ -98,4 +98,6 @@ export const IPC = {
   PLAY_ACTIONS: 'play-actions',
   CHECK_ELEVATION: 'check-elevation',
   IS_ELEVATED: 'is-elevated',
+  IDENTIFY_MONITOR: 'identify-monitor',
+  HAS_LAUNCHED_WINDOWS: 'has-launched-windows',
 } as const;
