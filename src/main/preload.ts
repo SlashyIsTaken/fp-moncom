@@ -39,7 +39,7 @@ contextBridge.exposeInMainWorld('moncom', {
   isElevated: () => ipcRenderer.invoke(IPC.IS_ELEVATED),
 
   // Monitor identification
-  identifyMonitor: (monitor: any, index: number) => ipcRenderer.invoke(IPC.IDENTIFY_MONITOR, monitor, index),
+  identifyMonitors: () => ipcRenderer.invoke(IPC.IDENTIFY_MONITOR),
 
   // Launched windows
   hasLaunchedWindows: () => ipcRenderer.invoke(IPC.HAS_LAUNCHED_WINDOWS),

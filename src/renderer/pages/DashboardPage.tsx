@@ -38,8 +38,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     setHasLaunched(false);
   };
 
-  const handleIdentifyMonitor = (monitor: MonitorInfo, index: number) => {
-    window.moncom?.identifyMonitor(monitor, index);
+  const handleIdentifyMonitors = () => {
+    window.moncom?.identifyMonitors();
   };
 
   return (
@@ -58,11 +58,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       <section className="mb-10">
         <SectionHeader title="Detected Monitors" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-          {monitors.map((m, i) => (
-            <button
+          {monitors.map((m) => (
+            <div
               key={m.id}
-              onClick={() => handleIdentifyMonitor(m, i + 1)}
-              className="text-left bg-bg-surface border border-border rounded-xl p-5 hover:border-commander/40 transition-all group cursor-pointer"
+              className="bg-bg-surface border border-border rounded-xl p-5 hover:border-commander/40 transition-all group"
             >
               <div className="flex items-start gap-4">
                 <div className="w-11 h-11 rounded-lg bg-commander/10 flex items-center justify-center shrink-0 group-hover:bg-commander/15 transition-colors">
@@ -82,7 +81,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                   </div>
                 </div>
               </div>
-            </button>
+            </div>
           ))}
 
           {monitors.length === 0 && (
@@ -112,6 +111,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               onClick={handleCloseAll}
             />
           )}
+          <ActionButton
+            icon={Monitor}
+            label="Identify Monitors"
+            onClick={handleIdentifyMonitors}
+          />
           <ActionButton
             icon={Zap}
             label="Refresh Monitors"

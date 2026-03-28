@@ -54,41 +54,64 @@ async function checkExeRequiresElevation(exePath: string): Promise<boolean> {
 }
 
 /**
- * Show a brief identification overlay on a monitor.
+ * Show identification overlays on all monitors. Click anywhere to dismiss.
  */
-function identifyMonitor(monitor: MonitorInfo, index: number): void {
-  const overlay = new BrowserWindow({
-    x: monitor.x,
-    y: monitor.y,
-    width: monitor.width,
-    height: monitor.height,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    focusable: false,
-    resizable: false,
-    webPreferences: { contextIsolation: true },
-  });
+let identifyOverlays: BrowserWindow[] = [];
 
-  overlay.setIgnoreMouseEvents(true);
+function closeIdentifyOverlays(): void {
+  for (const win of identifyOverlays) {
+    if (!win.isDestroyed()) win.close();
+  }
+  identifyOverlays = [];
+}
 
-  const html = `
-    <html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:rgba(14,17,22,0.85);font-family:system-ui,sans-serif;">
-      <div style="text-align:center;animation:fadeIn 0.2s ease-out">
-        <div style="font-size:120px;font-weight:800;color:#2A7FFF;line-height:1">${index}</div>
-        <div style="font-size:22px;color:#8B949E;margin-top:12px">${monitor.name}</div>
-        <div style="font-size:16px;color:#484F58;margin-top:6px">${monitor.width} × ${monitor.height}</div>
-      </div>
-      <style>@keyframes fadeIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}</style>
-    </body></html>
-  `;
+function identifyMonitors(): void {
+  // Close any existing overlays first
+  closeIdentifyOverlays();
 
-  overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  const displays = screen.getAllDisplays();
+  const primary = screen.getPrimaryDisplay();
 
-  setTimeout(() => {
-    if (!overlay.isDestroyed()) overlay.close();
-  }, 2000);
+  for (let i = 0; i < displays.length; i++) {
+    const d = displays[i];
+    const isPrimary = d.id === primary.id;
+    const name = `Monitor ${i + 1}${isPrimary ? ' (Primary)' : ''}`;
+
+    const overlay = new BrowserWindow({
+      x: d.bounds.x,
+      y: d.bounds.y,
+      width: d.bounds.width,
+      height: d.bounds.height,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      focusable: true,
+      resizable: false,
+      webPreferences: { contextIsolation: true },
+    });
+
+    const html = `
+      <html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:rgba(14,17,22,0.92);font-family:system-ui,sans-serif;cursor:pointer;user-select:none;" onclick="window.close()">
+        <div style="text-align:center;animation:fadeIn 0.2s ease-out">
+          <div style="font-size:140px;font-weight:800;color:#2A7FFF;line-height:1">${i + 1}</div>
+          <div style="font-size:24px;color:#8B949E;margin-top:16px">${name}</div>
+          <div style="font-size:16px;color:#484F58;margin-top:6px">${d.bounds.width} × ${d.bounds.height}</div>
+          <div style="font-size:14px;color:#484F58;margin-top:24px">Click anywhere to dismiss</div>
+        </div>
+        <style>@keyframes fadeIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}</style>
+      </body></html>
+    `;
+
+    overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+
+    // When any overlay is closed, close all of them
+    overlay.on('closed', () => {
+      closeIdentifyOverlays();
+    });
+
+    identifyOverlays.push(overlay);
+  }
 }
 
 function createWindow() {
@@ -218,8 +241,8 @@ app.whenReady().then(() => {
   });
 
   // Monitor identification
-  ipcMain.handle(IPC.IDENTIFY_MONITOR, (_event, monitor: MonitorInfo, index: number) => {
-    identifyMonitor(monitor, index);
+  ipcMain.handle(IPC.IDENTIFY_MONITOR, () => {
+    identifyMonitors();
   });
 
   // Auto-launch preset on startup

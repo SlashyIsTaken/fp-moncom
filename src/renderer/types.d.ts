@@ -18,7 +18,7 @@ export interface MonCOMAPI {
   playActions(actions: AutomationAction[], zone: Zone, monitors: MonitorInfo[]): Promise<boolean>;
   checkElevation(exePath: string): Promise<boolean>;
   isElevated(): Promise<boolean>;
-  identifyMonitor(monitor: MonitorInfo, index: number): Promise<void>;
+  identifyMonitors(): Promise<void>;
   hasLaunchedWindows(): Promise<boolean>;
   openExternal(url: string): Promise<void>;
   windowMinimize(): void;
