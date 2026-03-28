@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, nativeImage, dialog } from 'electron';
 import * as path from 'path';
+import { execSync, spawn } from 'child_process';
 import { registerWindowHandlers, applyPresetFromMain } from './window-manager';
 import { registerPresetHandlers, loadSettings, loadPresets } from './preset-store';
 import { startRecording, stopRecording, playActions } from './automation-manager';
@@ -10,6 +11,47 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
 const isDev = !app.isPackaged;
+
+/**
+ * Check if the current process is running with administrator privileges.
+ */
+function isProcessElevated(): boolean {
+  try {
+    execSync('net session', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if an executable's manifest requests administrator elevation.
+ * Reads the embedded manifest via PowerShell and looks for requireAdministrator.
+ */
+async function checkExeRequiresElevation(exePath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const script = `
+      try {
+        $xml = [xml](Get-AppLockerFileInformation -Path '${exePath.replace(/'/g, "''")}' | Select-Object -ExpandProperty Publisher | Out-Null; '')
+      } catch {}
+      try {
+        $bytes = [System.IO.File]::ReadAllBytes('${exePath.replace(/'/g, "''")}')
+        $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+        if ($text -match 'requireAdministrator') { 'ELEVATED' } else { 'NORMAL' }
+      } catch { 'NORMAL' }
+    `;
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let output = '';
+    child.stdout.on('data', (data: Buffer) => { output += data.toString(); });
+    child.on('close', () => {
+      resolve(output.trim().includes('ELEVATED'));
+    });
+    child.on('error', () => resolve(false));
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -127,6 +169,14 @@ app.whenReady().then(() => {
   });
   ipcMain.handle(IPC.PLAY_ACTIONS, async (_event, actions, zone, monitors) => {
     return playActions(actions, zone, monitors);
+  });
+
+  // Elevation detection
+  ipcMain.handle(IPC.CHECK_ELEVATION, async (_event, exePath: string) => {
+    return checkExeRequiresElevation(exePath);
+  });
+  ipcMain.handle(IPC.IS_ELEVATED, () => {
+    return isProcessElevated();
   });
 
   // Auto-launch preset on startup

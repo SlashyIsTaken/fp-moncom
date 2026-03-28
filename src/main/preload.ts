@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('moncom', {
   playActions: (actions: any, zone: any, monitors: any) =>
     ipcRenderer.invoke(IPC.PLAY_ACTIONS, actions, zone, monitors),
 
+  // Elevation
+  checkElevation: (exePath: string) => ipcRenderer.invoke(IPC.CHECK_ELEVATION, exePath),
+  isElevated: () => ipcRenderer.invoke(IPC.IS_ELEVATED),
+
   // Shell
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
 

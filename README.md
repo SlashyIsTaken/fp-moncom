@@ -76,6 +76,7 @@ A central overview of your monitors and presets with quick-action buttons:
 - **Launch on startup** — register MonCOM to start with Windows
 - **Minimize to tray** — keep it running in the background via the system tray
 - **Auto-launch preset** — automatically apply a saved preset when MonCOM starts (with a short delay to let displays stabilize)
+- **Run as administrator** — enable this only if you need to launch applications that require elevated privileges. When enabled, MonCOM must be started as administrator. MonCOM will automatically detect when an assigned executable requires elevation and warn you in the zone editor
 
 ### System Tray Integration
 MonCOM lives in your system tray. Double-click the icon or use the context menu to show or hide the main window without closing the app.

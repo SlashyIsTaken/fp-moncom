@@ -16,6 +16,8 @@ export interface MonCOMAPI {
   startRecording(zone: Zone, monitors: MonitorInfo[]): Promise<boolean>;
   stopRecording(): Promise<AutomationAction[]>;
   playActions(actions: AutomationAction[], zone: Zone, monitors: MonitorInfo[]): Promise<boolean>;
+  checkElevation(exePath: string): Promise<boolean>;
+  isElevated(): Promise<boolean>;
   openExternal(url: string): Promise<void>;
   windowMinimize(): void;
   windowMaximize(): void;

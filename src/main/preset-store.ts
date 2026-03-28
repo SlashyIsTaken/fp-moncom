@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   minimizeToTray: true,
   autoLaunchPreset: false,
   autoLaunchPresetId: null,
+  runAsAdmin: false,
   hotkeys: {},
 };
 

@@ -75,6 +75,8 @@ export interface AppSettings {
   minimizeToTray: boolean;
   autoLaunchPreset: boolean;
   autoLaunchPresetId: string | null;
+  /** Launch MonCOM with administrator privileges (needed for apps that require elevation) */
+  runAsAdmin: boolean;
   hotkeys: Record<string, string>;
 }
 
@@ -94,4 +96,6 @@ export const IPC = {
   START_RECORDING: 'start-recording',
   STOP_RECORDING: 'stop-recording',
   PLAY_ACTIONS: 'play-actions',
+  CHECK_ELEVATION: 'check-elevation',
+  IS_ELEVATED: 'is-elevated',
 } as const;

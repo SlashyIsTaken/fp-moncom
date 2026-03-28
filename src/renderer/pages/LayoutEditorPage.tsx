@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Monitor, Save, Trash2, Play, Globe, AppWindow, Grid2x2, Grid3x3, Columns2, Rows2, Check, FolderOpen, Circle, Square, MousePointerClick, Keyboard, Type, X } from 'lucide-react';
+import { Monitor, Save, Trash2, Play, Globe, AppWindow, Grid2x2, Grid3x3, Columns2, Rows2, Check, FolderOpen, Circle, Square, MousePointerClick, Keyboard, Type, X, ShieldAlert } from 'lucide-react';
 import { Tooltip } from '../components/Tooltip';
 import type { MonitorInfo, Zone, ZoneContent, Preset, AutomationAction } from '../../shared/types';
 
@@ -340,6 +340,14 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
   const [label, setLabel] = useState(zone.content?.label || '');
   const [actions, setActions] = useState<AutomationAction[]>(zone.content?.actions || []);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [needsElevation, setNeedsElevation] = useState(false);
+  const [isElevated, setIsElevated] = useState(false);
+  const [runAsAdmin, setRunAsAdmin] = useState(false);
+
+  useEffect(() => {
+    window.moncom?.isElevated().then(setIsElevated);
+    window.moncom?.getSettings().then(s => setRunAsAdmin(s.runAsAdmin));
+  }, []);
 
   useEffect(() => {
     setType(zone.content?.type || 'url');
@@ -347,7 +355,17 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
     setLabel(zone.content?.label || '');
     setActions(zone.content?.actions || []);
     setShowAdvanced(!!zone.content?.label);
+    setNeedsElevation(false);
   }, [zone.id, zone.content]);
+
+  // Check elevation requirement when an app target changes
+  useEffect(() => {
+    if (type !== 'application' || !target.trim() || !target.toLowerCase().endsWith('.exe')) {
+      setNeedsElevation(false);
+      return;
+    }
+    window.moncom?.checkElevation(target.trim()).then(setNeedsElevation);
+  }, [type, target]);
 
   /** Auto-generate a display label from the target */
   const autoLabel = (t: string, contentType: 'url' | 'application') => {
@@ -438,6 +456,21 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
             >
               <FolderOpen className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Elevation warning */}
+      {needsElevation && !isElevated && (
+        <div className="flex items-start gap-2.5 px-3.5 py-3 bg-warning/10 border border-warning/20 rounded-lg">
+          <ShieldAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+          <div className="text-[11px] text-text-secondary leading-relaxed">
+            <p className="font-medium text-warning mb-1">This application requires administrator privileges</p>
+            {runAsAdmin ? (
+              <p>The "Run as administrator" setting is enabled, but MonCOM is not currently running with elevated privileges. Restart MonCOM as administrator for this app to launch correctly.</p>
+            ) : (
+              <p>Enable <span className="text-text-primary font-medium">"Run as administrator"</span> in Settings and restart MonCOM as administrator for this app to launch correctly.</p>
+            )}
           </div>
         </div>
       )}

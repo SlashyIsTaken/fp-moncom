@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Save, Check, ChevronDown } from 'lucide-react';
+import { Save, Check, ChevronDown, ShieldAlert } from 'lucide-react';
 import { Tooltip } from '../components/Tooltip';
 import type { AppSettings, Preset } from '../../shared/types';
 
@@ -10,6 +10,7 @@ export function SettingsPage() {
     minimizeToTray: true,
     autoLaunchPreset: false,
     autoLaunchPresetId: null,
+    runAsAdmin: false,
     hotkeys: {},
   });
   const [presets, setPresets] = useState<Preset[]>([]);
@@ -31,7 +32,7 @@ export function SettingsPage() {
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const toggle = (key: 'launchOnStartup' | 'minimizeToTray' | 'autoLaunchPreset') => {
+  const toggle = (key: 'launchOnStartup' | 'minimizeToTray' | 'autoLaunchPreset' | 'runAsAdmin') => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
@@ -69,6 +70,33 @@ export function SettingsPage() {
           onChange={() => toggle('minimizeToTray')}
           last
         />
+      </section>
+
+      {/* Elevated Launch */}
+      <section className="bg-bg-surface border border-border rounded-xl overflow-hidden mb-6">
+        <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-text-primary">Administrator Privileges</h2>
+          <Tooltip text="Only enable this if you need to launch applications that require administrator privileges. When enabled, MonCOM must be started as administrator for elevated apps to launch correctly." />
+        </div>
+
+        <SettingRow
+          title="Run as administrator"
+          description="Required only for launching applications that need elevated privileges"
+          checked={settings.runAsAdmin}
+          onChange={() => toggle('runAsAdmin')}
+          last={!settings.runAsAdmin}
+        />
+
+        {settings.runAsAdmin && (
+          <div className="px-6 py-4 border-t border-border flex items-start gap-3 bg-warning/5">
+            <ShieldAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+            <p className="text-xs text-text-secondary leading-relaxed">
+              With this enabled, MonCOM must be launched as administrator for elevated apps to work.
+              If you do not need to launch programs that require elevation, leave this off.
+              Right-click MonCOM and select <span className="text-text-primary font-medium">"Run as administrator"</span> when starting the app.
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Auto-launch */}

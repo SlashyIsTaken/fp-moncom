@@ -4,6 +4,7 @@ import { promisify } from 'util';
 import { IPC } from '../shared/types';
 import type { Zone, ZoneContent } from '../shared/types';
 import { playActions } from './automation-manager';
+import { loadSettings } from './preset-store';
 
 const execAsync = promisify(exec);
 
@@ -259,12 +260,26 @@ async function launchAppZone(target: string, label: string | undefined, x: numbe
   console.log(`[MonCOM] Launching app: ${target} (${hwndsBefore.size} existing windows)`);
 
   try {
-    const child = spawn('cmd.exe', ['/c', 'start', '', target], {
-      detached: true,
-      stdio: 'ignore',
-      shell: false,
-    });
-    child.unref();
+    const settings = loadSettings();
+    if (settings.runAsAdmin) {
+      // Use PowerShell Start-Process with -Verb RunAs for elevated launch
+      const child = spawn('powershell.exe', [
+        '-NoProfile', '-NonInteractive', '-Command',
+        `Start-Process -FilePath '${target.replace(/'/g, "''")}' -Verb RunAs`,
+      ], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      child.unref();
+    } else {
+      const child = spawn('cmd.exe', ['/c', 'start', '', target], {
+        detached: true,
+        stdio: 'ignore',
+        shell: false,
+      });
+      child.unref();
+    }
   } catch (e) {
     console.error('[MonCOM] App launch failed:', e);
     return;
