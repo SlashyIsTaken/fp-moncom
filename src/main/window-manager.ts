@@ -141,7 +141,8 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
   console.log(`[MonCOM] Requested bounds: (${x}, ${y}, ${w}, ${h})`);
   console.log(`[MonCOM] Actual bounds:    (${actual.x}, ${actual.y}, ${actual.width}, ${actual.height})`);
 
-  win.loadURL(url);
+  const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  win.loadURL(normalizedUrl);
   win.removeMenu();
 
   // Hide scrollbars once page loads
