@@ -16,71 +16,18 @@ const execAsync = promisify(exec);
 /** Track launched Electron BrowserWindows (for URLs) */
 const launchedWindows: BrowserWindow[] = [];
 
-/** Track launched app PIDs (for executables) */
-const launchedAppPIDs: Set<number> = new Set();
-
-/** Win32 type definition for PowerShell — only needed for app window management */
-const WIN32_TYPE = `
-Add-Type @"
-using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using System.Text;
-public class Win32 {
-  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-  [DllImport("user32.dll")]
-  public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-  [DllImport("user32.dll")]
-  public static extern bool IsWindowVisible(IntPtr hWnd);
-
-  [DllImport("user32.dll", SetLastError = true)]
-  public static extern int GetWindowTextLength(IntPtr hWnd);
-
-  [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-  public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-
-  [DllImport("user32.dll", SetLastError = true)]
-  public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
-
-  [DllImport("user32.dll", SetLastError = true)]
-  public static extern bool SetForegroundWindow(IntPtr hWnd);
-
-  [DllImport("user32.dll", SetLastError = true)]
-  public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-  [DllImport("user32.dll", SetLastError = true)]
-  public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-
-  [DllImport("dwmapi.dll")]
-  public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out bool pvAttribute, int cbAttribute);
-
-  public static List<IntPtr> GetVisibleWindows() {
-    var windows = new List<IntPtr>();
-    EnumWindows((hWnd, lParam) => {
-      if (IsWindowVisible(hWnd) && GetWindowTextLength(hWnd) > 0) {
-        bool isCloaked = false;
-        DwmGetWindowAttribute(hWnd, 14, out isCloaked, Marshal.SizeOf(typeof(bool)));
-        if (!isCloaked) {
-          windows.Add(hWnd);
-        }
-      }
-      return true;
-    }, IntPtr.Zero);
-    return windows;
-  }
-}
-"@
-`;
+/** Track launched app HWNDs (for executables — used to close them later) */
+const launchedAppHWNDs: Set<string> = new Set();
 
 /**
- * Run a PowerShell script via stdin.
+ * Run a PowerShell command passed as an argument (not stdin).
  */
 function runPS(script: string, timeout = 15000): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '-'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const child = spawn('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script,
+    ], {
+      stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
 
@@ -96,6 +43,9 @@ function runPS(script: string, timeout = 15000): Promise<string> {
 
     child.on('close', (code) => {
       clearTimeout(timer);
+      if (stderr.trim()) {
+        console.error(`[MonCOM] PowerShell stderr: ${stderr.trim()}`);
+      }
       if (code !== 0 && !stdout.trim()) {
         reject(new Error(`PowerShell exit ${code}: ${stderr.trim()}`));
       } else {
@@ -107,9 +57,6 @@ function runPS(script: string, timeout = 15000): Promise<string> {
       clearTimeout(timer);
       reject(err);
     });
-
-    child.stdin.write(script);
-    child.stdin.end();
   });
 }
 
@@ -169,21 +116,13 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
 // ─── App zones: launch exe + move via Win32 ───
 
 /**
- * Get all visible HWNDs as a Set of strings.
+ * Get all visible window MainWindowHandles via Get-Process (pure PowerShell, no Add-Type).
  */
 async function getVisibleHWNDs(): Promise<Set<string>> {
-  const ps = `
-${WIN32_TYPE}
-$windows = [Win32]::GetVisibleWindows()
-if ($windows.Count -eq 0) {
-  Write-Output "[]"
-} else {
-  $arr = $windows | ForEach-Object { $_.ToInt64() }
-  $arr | ConvertTo-Json -Compress
-}
-`;
+  const ps = `Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | ForEach-Object { $_.MainWindowHandle.ToInt64() } | ConvertTo-Json -Compress`;
   try {
     const stdout = await runPS(ps);
+    console.log(`[MonCOM] getVisibleHWNDs raw output: "${stdout.substring(0, 200)}"`);
     if (!stdout || stdout === '[]') return new Set();
     const data = JSON.parse(stdout);
     const arr: number[] = Array.isArray(data) ? data : [data];
@@ -195,15 +134,64 @@ if ($windows.Count -eq 0) {
 }
 
 /**
+ * Move a window by title match using PowerShell UIAutomation-free approach.
+ * Uses Get-Process to find, then .NET interop inline for MoveWindow only.
+ */
+async function moveWindowByTitle(titleHint: string, x: number, y: number, width: number, height: number): Promise<boolean> {
+  const safe = titleHint.replace(/'/g, "''").replace(/"/g, '`"');
+  // Compensate for Windows 10/11 invisible DWM borders (~8px on left/right/bottom)
+  const border = 8;
+  const ax = x - border;
+  const ay = y;
+  const aw = width + border * 2;
+  const ah = height + border;
+  const ps = `
+$p = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like '*${safe}*' } | Select-Object -First 1
+if ($p) {
+  $hwnd = $p.MainWindowHandle
+  $sig = '[DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int ht, bool r);'
+  $sig2 = '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);'
+  $sig3 = '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);'
+  $t = Add-Type -MemberDefinition ($sig + $sig2 + $sig3) -Name WinMove -Namespace MonCOM -PassThru -ErrorAction SilentlyContinue
+  if (-not $t) { $t = [MonCOM.WinMove] }
+  $t::ShowWindow($hwnd, 9) | Out-Null
+  $t::MoveWindow($hwnd, ${ax}, ${ay}, ${aw}, ${ah}, $true) | Out-Null
+  $t::SetForegroundWindow($hwnd) | Out-Null
+  Write-Output "OK:$($p.MainWindowTitle)"
+} else {
+  Write-Output "NOT_FOUND"
+}
+`;
+  try {
+    const result = await runPS(ps);
+    console.log(`[MonCOM] moveWindowByTitle("${titleHint}"): ${result}`);
+    return result.includes('OK');
+  } catch (e) {
+    console.error(`[MonCOM] moveWindowByTitle("${titleHint}") failed:`, e);
+    return false;
+  }
+}
+
+/**
  * Move a window by HWND.
  */
 async function moveWindowByHWND(hwnd: string, x: number, y: number, width: number, height: number): Promise<boolean> {
+  // Compensate for Windows 10/11 invisible DWM borders (~8px on left/right/bottom)
+  const border = 8;
+  const ax = x - border;
+  const ay = y;
+  const aw = width + border * 2;
+  const ah = height + border;
   const ps = `
-${WIN32_TYPE}
+$sig = '[DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int ht, bool r);'
+$sig2 = '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);'
+$sig3 = '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);'
+$t = Add-Type -MemberDefinition ($sig + $sig2 + $sig3) -Name WinMoveH -Namespace MonCOM -PassThru -ErrorAction SilentlyContinue
+if (-not $t) { $t = [MonCOM.WinMoveH] }
 $h = [IntPtr]::new(${hwnd})
-[Win32]::ShowWindow($h, 9) | Out-Null
-[Win32]::MoveWindow($h, ${x}, ${y}, ${width}, ${height}, $true) | Out-Null
-[Win32]::SetForegroundWindow($h) | Out-Null
+$t::ShowWindow($h, 9) | Out-Null
+$t::MoveWindow($h, ${ax}, ${ay}, ${aw}, ${ah}, $true) | Out-Null
+$t::SetForegroundWindow($h) | Out-Null
 Write-Output "OK"
 `;
   try {
@@ -211,39 +199,6 @@ Write-Output "OK"
     return result.includes('OK');
   } catch (e) {
     console.error(`[MonCOM] moveWindowByHWND(${hwnd}) failed:`, e);
-    return false;
-  }
-}
-
-/**
- * Move a window by partial title match.
- */
-async function moveWindowByTitle(titleHint: string, x: number, y: number, width: number, height: number): Promise<boolean> {
-  const safe = titleHint.replace(/'/g, "''");
-  const ps = `
-${WIN32_TYPE}
-$windows = [Win32]::GetVisibleWindows()
-foreach ($h in $windows) {
-  $len = [Win32]::GetWindowTextLength($h)
-  if ($len -gt 0) {
-    $sb = New-Object System.Text.StringBuilder($len + 1)
-    [Win32]::GetWindowText($h, $sb, $sb.Capacity) | Out-Null
-    $title = $sb.ToString()
-    if ($title -like '*${safe}*') {
-      [Win32]::ShowWindow($h, 9) | Out-Null
-      [Win32]::MoveWindow($h, ${x}, ${y}, ${width}, ${height}, $true) | Out-Null
-      [Win32]::SetForegroundWindow($h) | Out-Null
-      Write-Output "OK"
-      return
-    }
-  }
-}
-Write-Output "NOT_FOUND"
-`;
-  try {
-    const result = await runPS(ps);
-    return result.includes('OK');
-  } catch {
     return false;
   }
 }
@@ -306,6 +261,7 @@ async function launchAppZone(target: string, label: string | undefined, x: numbe
   if (newHWNDs.length > 0) {
     for (const hwnd of newHWNDs) {
       console.log(`[MonCOM] Moving app HWND ${hwnd}`);
+      launchedAppHWNDs.add(hwnd);
       const moved = await moveWindowByHWND(hwnd, x, y, w, h);
       console.log(`[MonCOM] Move result: ${moved}`);
       if (moved) return;
@@ -374,22 +330,49 @@ async function launchZoneContent(zone: Zone, monitors: any[]): Promise<void> {
 }
 
 /**
+ * Close a launched app window: send WM_CLOSE gracefully, then force-kill if it won't close.
+ */
+async function closeAppWindow(hwnd: string): Promise<void> {
+  // 1) Send WM_CLOSE gracefully
+  try {
+    await runPS(`
+$sig = '[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);'
+$sig2 = '[DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);'
+$sig3 = '[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);'
+$t = Add-Type -MemberDefinition ($sig + $sig2 + $sig3) -Name WinClose -Namespace MonCOM -PassThru -ErrorAction SilentlyContinue
+if (-not $t) { $t = [MonCOM.WinClose] }
+$h = [IntPtr]::new(${hwnd})
+if ($t::IsWindow($h)) {
+  $t::PostMessage($h, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+  Start-Sleep -Milliseconds 1000
+  if ($t::IsWindow($h)) {
+    $pid = [uint32]0
+    $t::GetWindowThreadProcessId($h, [ref]$pid) | Out-Null
+    if ($pid -ne 0) { taskkill /PID $pid /F /T 2>$null }
+    Write-Output "KILLED:$pid"
+  } else { Write-Output "CLOSED" }
+} else { Write-Output "GONE" }
+`, 10000);
+  } catch (e) {
+    console.error(`[MonCOM] closeAppWindow(${hwnd}) failed:`, e);
+    // Last resort: try taskkill by HWND lookup
+  }
+}
+
+/**
  * Close all launched zones.
  */
 async function closeAllZones(): Promise<void> {
-  // Close Electron windows
+  // Close Electron windows (URLs)
   for (const win of [...launchedWindows]) {
     if (!win.isDestroyed()) win.close();
   }
   launchedWindows.length = 0;
 
-  // Kill tracked app PIDs
-  for (const pid of launchedAppPIDs) {
-    try {
-      await execAsync(`taskkill /PID ${pid} /F /T`, { shell: 'cmd.exe' });
-    } catch {}
-  }
-  launchedAppPIDs.clear();
+  // Close tracked app windows (graceful then force)
+  const closePromises = [...launchedAppHWNDs].map(hwnd => closeAppWindow(hwnd));
+  await Promise.all(closePromises);
+  launchedAppHWNDs.clear();
 }
 
 /**
@@ -409,7 +392,7 @@ async function findWindows(): Promise<{ title: string; pid: number }[]> {
 
 function hasLaunchedWindows(): boolean {
   const hasElectronWindows = launchedWindows.some(w => !w.isDestroyed());
-  return hasElectronWindows || launchedAppPIDs.size > 0;
+  return hasElectronWindows || launchedAppHWNDs.size > 0;
 }
 
 export function registerWindowHandlers(ipcMain: IpcMain) {
