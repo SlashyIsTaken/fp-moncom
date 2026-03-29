@@ -427,6 +427,11 @@ export function registerWindowHandlers(ipcMain: IpcMain) {
  * Apply a preset directly from the main process (used by IPC and auto-launch).
  */
 export async function applyPresetFromMain(preset: any, screenModule: Electron.Screen): Promise<boolean> {
+  // Close any existing launched windows first
+  if (hasLaunchedWindows()) {
+    await closeAllZones();
+  }
+
   const displays = screenModule.getAllDisplays();
   const monitors = displays.map((d, i) => ({
     id: `monitor-${d.id}`,
