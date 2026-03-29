@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { TitleBar } from './components/TitleBar';
 import { Sidebar } from './components/Sidebar';
@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { LayoutEditorPage } from './pages/LayoutEditorPage';
 import { PresetsPage } from './pages/PresetsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import type { Preset } from '../shared/types';
 
 export type Page = 'dashboard' | 'editor' | 'presets' | 'settings';
 
@@ -16,12 +17,23 @@ const isPreRelease = (() => {
 
 export function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard');
+  const [editingPreset, setEditingPreset] = useState<Preset | null>(null);
+
+  const handleNavigate = useCallback((page: Page) => {
+    if (page !== 'editor') setEditingPreset(null);
+    setActivePage(page);
+  }, []);
+
+  const handleEditPreset = useCallback((preset: Preset) => {
+    setEditingPreset(preset);
+    setActivePage('editor');
+  }, []);
 
   const renderPage = () => {
     switch (activePage) {
-      case 'dashboard': return <DashboardPage onNavigate={setActivePage} />;
-      case 'editor': return <LayoutEditorPage />;
-      case 'presets': return <PresetsPage onNavigate={setActivePage} />;
+      case 'dashboard': return <DashboardPage onNavigate={handleNavigate} />;
+      case 'editor': return <LayoutEditorPage editingPreset={editingPreset} onNavigate={handleNavigate} />;
+      case 'presets': return <PresetsPage onNavigate={handleNavigate} onEditPreset={handleEditPreset} />;
       case 'settings': return <SettingsPage />;
     }
   };
@@ -31,7 +43,7 @@ export function App() {
       <TitleBar />
       {isPreRelease && <AlphaBanner />}
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar activePage={activePage} onNavigate={setActivePage} />
+        <Sidebar activePage={activePage} onNavigate={handleNavigate} />
         <main className="flex-1 overflow-y-auto p-8">
           <div className="max-w-6xl mx-auto">
             {renderPage()}

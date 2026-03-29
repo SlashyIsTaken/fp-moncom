@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Trash2, Clock, Layers, Bookmark } from 'lucide-react';
+import { Play, Trash2, Clock, Layers, Bookmark, Pencil } from 'lucide-react';
 import type { Preset } from '../../shared/types';
 import type { Page } from '../App';
 
 interface PresetsPageProps {
   onNavigate: (page: Page) => void;
+  onEditPreset: (preset: Preset) => void;
 }
 
-export function PresetsPage({ onNavigate }: PresetsPageProps) {
+export function PresetsPage({ onNavigate, onEditPreset }: PresetsPageProps) {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [applying, setApplying] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -80,6 +81,13 @@ export function PresetsPage({ onNavigate }: PresetsPageProps) {
                     title="Apply preset"
                   >
                     <Play className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => onEditPreset(preset)}
+                    className="p-2.5 rounded-lg text-text-muted hover:text-commander hover:bg-commander/10 transition-colors"
+                    title="Edit preset"
+                  >
+                    <Pencil className="w-4 h-4" />
                   </button>
                   {confirmDelete === preset.id ? (
                     <button

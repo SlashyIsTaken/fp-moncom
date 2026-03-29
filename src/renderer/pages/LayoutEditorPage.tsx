@@ -48,16 +48,37 @@ function makeZoneId() {
   return `zone-${Date.now()}-${zoneIdCounter++}`;
 }
 
-export function LayoutEditorPage() {
+import type { Page } from '../App';
+
+interface LayoutEditorPageProps {
+  editingPreset?: Preset | null;
+  onNavigate?: (page: Page) => void;
+}
+
+export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPageProps) {
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [presetName, setPresetName] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     window.moncom?.getMonitors().then(setMonitors);
   }, []);
+
+  // Load preset into editor when editing
+  useEffect(() => {
+    if (editingPreset) {
+      setZones(editingPreset.layout.zones);
+      setPresetName(editingPreset.name);
+      setEditingId(editingPreset.id);
+      setSelectedZone(null);
+      setSaveStatus('idle');
+    } else {
+      setEditingId(null);
+    }
+  }, [editingPreset]);
 
   const applyTemplate = useCallback((monitorId: string, template: SplitTemplate) => {
     setZones(prev => {
@@ -83,15 +104,17 @@ export function LayoutEditorPage() {
 
   const handleSavePreset = async () => {
     if (!presetName.trim()) return;
+    const now = new Date().toISOString();
     const preset: Preset = {
-      id: `preset-${Date.now()}`,
+      id: editingId || `preset-${Date.now()}`,
       name: presetName.trim(),
-      layout: { id: `layout-${Date.now()}`, zones },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      layout: { id: editingId ? `layout-${editingId}` : `layout-${Date.now()}`, zones },
+      createdAt: editingPreset?.createdAt || now,
+      updatedAt: now,
     };
     try {
       await window.moncom?.savePreset(preset);
+      setEditingId(preset.id);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2500);
     } catch {
@@ -274,9 +297,9 @@ export function LayoutEditorPage() {
           <div className="bg-bg-surface border border-border rounded-xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <h3 className="text-xs font-semibold text-text-muted uppercase tracking-widest">
-                Save as Preset
+                {editingId ? 'Update Preset' : 'Save as Preset'}
               </h3>
-              <Tooltip text="Save this layout so you can quickly apply it later from the Dashboard or Presets page." />
+              <Tooltip text={editingId ? "Save changes to this existing preset." : "Save this layout so you can quickly apply it later from the Dashboard or Presets page."} />
             </div>
             <input
               type="text"
@@ -293,7 +316,7 @@ export function LayoutEditorPage() {
               {saveStatus === 'saved' ? (
                 <><Check className="w-4 h-4" /> Saved!</>
               ) : (
-                <><Save className="w-4 h-4" /> Save Preset</>
+                <><Save className="w-4 h-4" /> {editingId ? 'Update Preset' : 'Save Preset'}</>
               )}
             </button>
           </div>
