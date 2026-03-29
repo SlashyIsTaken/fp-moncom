@@ -35,7 +35,6 @@ contextBridge.exposeInMainWorld('moncom', {
     ipcRenderer.invoke(IPC.PLAY_ACTIONS, actions, zone, monitors),
 
   // Elevation
-  checkElevation: (exePath: string) => ipcRenderer.invoke(IPC.CHECK_ELEVATION, exePath),
   isElevated: () => ipcRenderer.invoke(IPC.IS_ELEVATED),
 
   // Monitor identification

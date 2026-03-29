@@ -1,10 +1,15 @@
 import { IpcMain, BrowserWindow, screen } from 'electron';
-import { exec, spawn } from 'child_process';
+import { exec, execSync, spawn } from 'child_process';
 import { promisify } from 'util';
 import { IPC } from '../shared/types';
 import type { Zone, ZoneContent } from '../shared/types';
 import { playActions } from './automation-manager';
 import { loadSettings } from './preset-store';
+
+function isProcessElevated(): boolean {
+  try { execSync('net session', { stdio: 'ignore' }); return true; }
+  catch { return false; }
+}
 
 const execAsync = promisify(exec);
 
@@ -253,8 +258,10 @@ async function launchAppZone(target: string, label: string | undefined, x: numbe
 
   try {
     const settings = loadSettings();
-    if (settings.runAsAdmin) {
-      // Use PowerShell Start-Process with -Verb RunAs for elevated launch
+    const elevated = isProcessElevated();
+
+    if (settings.runAsAdmin && !elevated) {
+      // MonCOM is not elevated but user wants admin launch — use RunAs (triggers UAC)
       const child = spawn('powershell.exe', [
         '-NoProfile', '-NonInteractive', '-Command',
         `Start-Process -FilePath '${target.replace(/'/g, "''")}' -Verb RunAs`,
@@ -264,7 +271,9 @@ async function launchAppZone(target: string, label: string | undefined, x: numbe
         windowsHide: true,
       });
       child.unref();
+      console.log('[MonCOM] Launched with RunAs (UAC prompt expected — MonCOM is not elevated)');
     } else {
+      // Either runAsAdmin is off, or MonCOM is already elevated (child inherits elevation)
       const child = spawn('cmd.exe', ['/c', 'start', '', target], {
         detached: true,
         stdio: 'ignore',
@@ -277,9 +286,11 @@ async function launchAppZone(target: string, label: string | undefined, x: numbe
     return;
   }
 
-  // Poll for new window (every 500ms, up to 8 seconds)
+  // Poll for new window (every 500ms, up to 16 seconds when RunAs is used to account for UAC delay)
+  const settings = loadSettings();
+  const maxAttempts = (settings.runAsAdmin && !isProcessElevated()) ? 32 : 16;
   let newHWNDs: string[] = [];
-  for (let attempt = 0; attempt < 16; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise(r => setTimeout(r, 500));
     const hwndsAfter = await getVisibleHWNDs();
     newHWNDs = [];
