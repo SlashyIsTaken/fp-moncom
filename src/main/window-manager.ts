@@ -145,20 +145,11 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
   win.loadURL(normalizedUrl);
   win.removeMenu();
 
-  // Hide scrollbars once page loads
-  win.webContents.on('did-finish-load', () => {
-    win.webContents.insertCSS(`
-      ::-webkit-scrollbar { display: none !important; }
-      html, body { overflow: hidden !important; }
-    `);
-  });
-  // Also inject on navigation within the page
-  win.webContents.on('did-navigate', () => {
-    win.webContents.insertCSS(`
-      ::-webkit-scrollbar { display: none !important; }
-      html, body { overflow: hidden !important; }
-    `);
-  });
+  // Hide scrollbars visually but keep scrolling functional
+  const scrollbarCSS = `::-webkit-scrollbar { display: none !important; }
+    html, body { scrollbar-width: none !important; }`;
+  win.webContents.on('did-finish-load', () => { win.webContents.insertCSS(scrollbarCSS); });
+  win.webContents.on('did-navigate', () => { win.webContents.insertCSS(scrollbarCSS); });
 
   launchedWindows.push(win);
 
