@@ -447,14 +447,14 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
             <input
               type="text"
               value={target}
-              onChange={(e) => setTarget(e.target.value)}
+              onChange={(e) => { setTarget(e.target.value); setLabel(''); }}
               placeholder="C:\Program Files\..."
               className="flex-1 min-w-0 px-4 py-2.5 bg-bg-dark border border-border rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-commander/60 transition-colors"
             />
             <button
               onClick={async () => {
                 const path = await window.moncom?.pickExecutable();
-                if (path) setTarget(path);
+                if (path) { setTarget(path); setLabel(''); }
               }}
               className="px-3 py-2.5 bg-bg-dark border border-border rounded-lg text-text-muted hover:border-commander/50 hover:text-commander transition-all"
               title="Browse for executable"
