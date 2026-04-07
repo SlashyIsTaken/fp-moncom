@@ -1,7 +1,6 @@
-import { IpcMain } from 'electron';
+import { IpcMain, app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { app } from 'electron';
 import { IPC } from '../shared/types';
 import type { Preset, AppSettings } from '../shared/types';
 
@@ -83,6 +82,13 @@ export function registerPresetHandlers(ipcMain: IpcMain) {
 
   ipcMain.handle(IPC.SAVE_SETTINGS, (_event, settings: AppSettings) => {
     saveSettingsFile(settings);
+
+    // Register/unregister Windows startup
+    app.setLoginItemSettings({
+      openAtLogin: settings.launchOnStartup,
+      path: process.execPath,
+    });
+
     return settings;
   });
 }
