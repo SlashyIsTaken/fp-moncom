@@ -52,6 +52,35 @@ export interface ZoneContent {
   actions?: AutomationAction[];
 }
 
+export interface AppWindowCloseFailure {
+  hwnd: string;
+  reason: string;
+}
+
+export interface CloseAllZonesReport {
+  electronWindowsClosed: number;
+  appWindowsAttempted: number;
+  appWindowsClosedGracefully: number;
+  appWindowsForceKilled: number;
+  appWindowsAlreadyGone: number;
+  appWindowsFailed: AppWindowCloseFailure[];
+}
+
+export interface LaunchZoneResult {
+  success: boolean;
+  zoneId: string;
+  contentType?: ZoneContent['type'];
+  target?: string;
+  error?: string;
+}
+
+export interface ApplyPresetResult {
+  success: boolean;
+  results: LaunchZoneResult[];
+  failedZones: LaunchZoneResult[];
+  closeReport?: CloseAllZonesReport;
+}
+
 /** A layout defines how monitors are split into zones */
 export interface Layout {
   id: string;

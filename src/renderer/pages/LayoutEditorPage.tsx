@@ -62,6 +62,7 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
   const [presetName, setPresetName] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [applyStatus, setApplyStatus] = useState<string | null>(null);
 
   useEffect(() => {
     window.moncom?.getMonitors().then(setMonitors);
@@ -129,7 +130,22 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    await window.moncom?.applyPreset(preset);
+    const result = await window.moncom?.applyPreset(preset);
+    if (!result) return;
+
+    const closeFailureCount = result.closeReport?.appWindowsFailed.length ?? 0;
+    if (result.failedZones.length > 0 || closeFailureCount > 0) {
+      const parts: string[] = [];
+      if (result.failedZones.length > 0) {
+        parts.push(`${result.failedZones.length} zone(s) failed to launch`);
+      }
+      if (closeFailureCount > 0) {
+        parts.push(`${closeFailureCount} existing window(s) could not be closed`);
+      }
+      setApplyStatus(parts.join('. ') + '.');
+    } else {
+      setApplyStatus(null);
+    }
   };
 
   // Monitor map viewport
@@ -158,6 +174,11 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
           <p className="text-sm text-text-secondary mt-1.5">
             Split your monitors into zones and assign content
           </p>
+          {applyStatus && (
+            <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+              {applyStatus}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Tooltip text="Launches all configured zones on your actual monitors right now." />
@@ -549,6 +570,7 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
   const [showAddType, setShowAddType] = useState(false);
   const [typeText, setTypeText] = useState('');
   const [typeDelay, setTypeDelay] = useState('500');
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const [launching, setLaunching] = useState(false);
   const launchDelay = zone.content?.launchDelay ?? 0;
@@ -557,7 +579,12 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
     if (!zone.content) return;
 
     // Close any existing zone windows first
-    await window.moncom?.closeAllZones();
+    const closeReport = await window.moncom?.closeAllZones();
+    if (closeReport && closeReport.appWindowsFailed.length > 0) {
+      setStatusMessage(`${closeReport.appWindowsFailed.length} window(s) could not be closed before recording.`);
+    } else {
+      setStatusMessage(null);
+    }
 
     // Countdown first — gives user time to prepare
     setCountdown(3);
@@ -569,7 +596,12 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
 
     // Launch content after countdown — the real startup delay is naturally captured
     setLaunching(true);
-    await window.moncom?.launchZone(zone, monitors);
+    const launchResult = await window.moncom?.launchZone(zone, monitors);
+    if (!launchResult?.success) {
+      setLaunching(false);
+      setStatusMessage(launchResult?.error ?? 'Failed to launch this zone.');
+      return;
+    }
 
     // Small configurable buffer for extra startup time
     if (launchDelay > 0) {
@@ -580,6 +612,7 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
     const started = await window.moncom?.startRecording(zone, monitors);
     if (started) {
       setRecording(true);
+      setStatusMessage(null);
     }
   };
 
@@ -675,6 +708,11 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
       </div>
 
       {/* Launch / countdown overlay */}
+      {statusMessage && (
+        <div className="mb-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+          {statusMessage}
+        </div>
+      )}
       {launching && (
         <div className="flex items-center justify-center gap-2 py-3 mb-3 bg-commander/10 border border-commander/30 rounded-lg">
           <span className="text-sm font-medium text-commander">

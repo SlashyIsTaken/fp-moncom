@@ -2,7 +2,7 @@ import { IpcMain, BrowserWindow, screen } from 'electron';
 import { exec, execSync, spawn } from 'child_process';
 import { promisify } from 'util';
 import { IPC } from '../shared/types';
-import type { Zone, ZoneContent } from '../shared/types';
+import type { ApplyPresetResult, CloseAllZonesReport, LaunchZoneResult, Zone } from '../shared/types';
 import { playActions } from './automation-manager';
 import { loadSettings } from './preset-store';
 
@@ -18,6 +18,19 @@ const launchedWindows: BrowserWindow[] = [];
 
 /** Track launched app HWNDs (for executables — used to close them later) */
 const launchedAppHWNDs: Set<string> = new Set();
+
+type AppCloseResult = {
+  hwnd: string;
+  status: 'closed' | 'killed' | 'gone' | 'failed';
+  reason?: string;
+};
+
+type VisibleWindowInfo = {
+  hwnd: string;
+  pid: number;
+  processName: string;
+  title: string;
+};
 
 /**
  * Run a PowerShell command passed as an argument (not stdin).
@@ -118,18 +131,23 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
 /**
  * Get all visible window MainWindowHandles via Get-Process (pure PowerShell, no Add-Type).
  */
-async function getVisibleHWNDs(): Promise<Set<string>> {
-  const ps = `Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | ForEach-Object { $_.MainWindowHandle.ToInt64() } | ConvertTo-Json -Compress`;
+async function getVisibleWindows(): Promise<VisibleWindowInfo[]> {
+  const ps = `Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | Select-Object @{Name='Hwnd';Expression={$_.MainWindowHandle.ToInt64()}}, Id, ProcessName, MainWindowTitle | ConvertTo-Json -Compress`;
   try {
     const stdout = await runPS(ps);
-    console.log(`[MonCOM] getVisibleHWNDs raw output: "${stdout.substring(0, 200)}"`);
-    if (!stdout || stdout === '[]') return new Set();
+    console.log(`[MonCOM] getVisibleWindows raw output: "${stdout.substring(0, 200)}"`);
+    if (!stdout || stdout === '[]') return [];
     const data = JSON.parse(stdout);
-    const arr: number[] = Array.isArray(data) ? data : [data];
-    return new Set(arr.map(h => h.toString()));
+    const arr: any[] = Array.isArray(data) ? data : [data];
+    return arr.map((entry: any) => ({
+      hwnd: String(entry.Hwnd),
+      pid: Number(entry.Id ?? 0),
+      processName: String(entry.ProcessName ?? ''),
+      title: String(entry.MainWindowTitle ?? ''),
+    }));
   } catch (e) {
-    console.error('[MonCOM] getVisibleHWNDs failed:', e);
-    return new Set();
+    console.error('[MonCOM] getVisibleWindows failed:', e);
+    return [];
   }
 }
 
@@ -206,10 +224,21 @@ Write-Output "OK"
 /**
  * Launch an application and try to position its window.
  */
-async function launchAppZone(target: string, label: string | undefined, x: number, y: number, w: number, h: number): Promise<void> {
-  // Snapshot HWNDs before launch
-  const hwndsBefore = await getVisibleHWNDs();
-  console.log(`[MonCOM] Launching app: ${target} (${hwndsBefore.size} existing windows)`);
+async function launchAppZone(
+  target: string,
+  label: string | undefined,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): Promise<{ success: boolean; error?: string }> {
+  // Snapshot windows before launch to detect "new window" vs "already-running/single-instance reuse".
+  const windowsBefore = await getVisibleWindows();
+  const hwndsBefore = new Set(windowsBefore.map(wi => wi.hwnd));
+  console.log(`[MonCOM] Launching app: ${target} (${windowsBefore.length} existing windows)`);
+
+  const parts = target.replace(/\\/g, '/').split('/');
+  const exeName = (parts[parts.length - 1]?.replace(/\.(exe|lnk|bat|cmd)$/i, '') || '').toLowerCase();
 
   try {
     const settings = loadSettings();
@@ -238,42 +267,65 @@ async function launchAppZone(target: string, label: string | undefined, x: numbe
     }
   } catch (e) {
     console.error('[MonCOM] App launch failed:', e);
-    return;
+    return { success: false, error: `Application launch failed: ${target}` };
   }
 
   // Poll for new window (every 500ms, up to 16 seconds when RunAs is used to account for UAC delay)
   const settings = loadSettings();
   const maxAttempts = (settings.runAsAdmin && !isProcessElevated()) ? 32 : 16;
-  let newHWNDs: string[] = [];
+  let latestWindows: VisibleWindowInfo[] = windowsBefore;
+  let newWindows: VisibleWindowInfo[] = [];
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise(r => setTimeout(r, 500));
-    const hwndsAfter = await getVisibleHWNDs();
-    newHWNDs = [];
-    for (const hwnd of hwndsAfter) {
-      if (!hwndsBefore.has(hwnd)) newHWNDs.push(hwnd);
-    }
-    if (newHWNDs.length > 0) {
-      console.log(`[MonCOM] Found ${newHWNDs.length} new app window(s) after ${(attempt + 1) * 500}ms`);
+    latestWindows = await getVisibleWindows();
+    newWindows = latestWindows.filter(win => !hwndsBefore.has(win.hwnd));
+    if (newWindows.length > 0) {
+      console.log(`[MonCOM] Found ${newWindows.length} new app window(s) after ${(attempt + 1) * 500}ms`);
       break;
     }
   }
 
-  if (newHWNDs.length > 0) {
-    for (const hwnd of newHWNDs) {
-      console.log(`[MonCOM] Moving app HWND ${hwnd}`);
-      launchedAppHWNDs.add(hwnd);
-      const moved = await moveWindowByHWND(hwnd, x, y, w, h);
+  if (newWindows.length > 0) {
+    for (const windowInfo of newWindows) {
+      console.log(`[MonCOM] Moving new app HWND ${windowInfo.hwnd} (${windowInfo.processName})`);
+      launchedAppHWNDs.add(windowInfo.hwnd);
+      const moved = await moveWindowByHWND(windowInfo.hwnd, x, y, w, h);
       console.log(`[MonCOM] Move result: ${moved}`);
-      if (moved) return;
+      if (moved) return { success: true };
+    }
+  }
+
+  // Predictable single-instance strategy:
+  // if no new HWND was detected, try to reuse a visible window belonging to the target process.
+  if (exeName) {
+    const candidates = latestWindows
+      .filter(win => win.processName.toLowerCase() === exeName)
+      .sort((a, b) => {
+        const aWasPresentBeforeLaunch = hwndsBefore.has(a.hwnd) ? 0 : 1;
+        const bWasPresentBeforeLaunch = hwndsBefore.has(b.hwnd) ? 0 : 1;
+        if (aWasPresentBeforeLaunch !== bWasPresentBeforeLaunch) {
+          return aWasPresentBeforeLaunch - bWasPresentBeforeLaunch;
+        }
+        return a.pid - b.pid || Number(a.hwnd) - Number(b.hwnd);
+      });
+
+    for (const candidate of candidates) {
+      console.log(`[MonCOM] Reusing existing app window for single-instance flow: ${candidate.processName} (${candidate.hwnd})`);
+      const moved = await moveWindowByHWND(candidate.hwnd, x, y, w, h);
+      if (moved) {
+        if (!hwndsBefore.has(candidate.hwnd)) {
+          launchedAppHWNDs.add(candidate.hwnd);
+        } else {
+          console.log(`[MonCOM] Reused pre-existing HWND ${candidate.hwnd}; leaving it unmanaged for close-all.`);
+        }
+        return { success: true };
+      }
     }
   }
 
   // Fallback: title match using label or exe name
   const hints: string[] = [];
   if (label) hints.push(label);
-  // Extract exe name without extension
-  const parts = target.replace(/\\/g, '/').split('/');
-  const exeName = parts[parts.length - 1]?.replace(/\.exe$/i, '');
   if (exeName) hints.push(exeName);
 
   for (const hint of hints) {
@@ -281,10 +333,14 @@ async function launchAppZone(target: string, label: string | undefined, x: numbe
     const result = await moveWindowByTitle(hint, x, y, w, h);
     if (result) {
       console.log(`[MonCOM] App title match succeeded for "${hint}"`);
-      return;
+      return { success: true };
     }
   }
   console.log('[MonCOM] App positioning failed');
+  return {
+    success: false,
+    error: `Application launched but MonCOM could not find/position its window: ${target}`,
+  };
 }
 
 // ─── Main orchestration ───
@@ -292,14 +348,26 @@ async function launchAppZone(target: string, label: string | undefined, x: numbe
 /**
  * Launch a zone's content and position it.
  */
-async function launchZoneContent(zone: Zone, monitors: any[]): Promise<void> {
-  if (!zone.content) return;
+async function launchZoneContent(zone: Zone, monitors: any[]): Promise<LaunchZoneResult> {
+  if (!zone.content) {
+    return {
+      success: false,
+      zoneId: zone.id,
+      error: 'Zone has no content assigned',
+    };
+  }
   const content = zone.content;
 
   const monitor = monitors.find((m: any) => m.id === zone.monitorId);
   if (!monitor) {
     console.error(`[MonCOM] Monitor not found: ${zone.monitorId}`);
-    return;
+    return {
+      success: false,
+      zoneId: zone.id,
+      contentType: content.type,
+      target: content.target,
+      error: `Monitor not found for zone: ${zone.monitorId}`,
+    };
   }
 
   const absX = Math.round(monitor.x + zone.x * monitor.width);
@@ -312,7 +380,16 @@ async function launchZoneContent(zone: Zone, monitors: any[]): Promise<void> {
   if (content.type === 'url') {
     launchURLZone(content.target, absX, absY, absW, absH);
   } else if (content.type === 'application') {
-    await launchAppZone(content.target, content.label, absX, absY, absW, absH);
+    const appLaunch = await launchAppZone(content.target, content.label, absX, absY, absW, absH);
+    if (!appLaunch.success) {
+      return {
+        success: false,
+        zoneId: zone.id,
+        contentType: content.type,
+        target: content.target,
+        error: appLaunch.error ?? 'Application launch failed',
+      };
+    }
   }
 
   // Play automation actions if configured
@@ -325,17 +402,33 @@ async function launchZoneContent(zone: Zone, monitors: any[]): Promise<void> {
       await new Promise(r => setTimeout(r, extraDelay));
     }
     console.log(`[MonCOM] Playing ${content.actions.length} automation actions`);
-    await playActions(content.actions, zone, monitors);
+    const playbackOk = await playActions(content.actions, zone, monitors);
+    if (!playbackOk) {
+      return {
+        success: false,
+        zoneId: zone.id,
+        contentType: content.type,
+        target: content.target,
+        error: 'Content launched but automation playback failed',
+      };
+    }
   }
+
+  return {
+    success: true,
+    zoneId: zone.id,
+    contentType: content.type,
+    target: content.target,
+  };
 }
 
 /**
  * Close a launched app window: send WM_CLOSE gracefully, then force-kill if it won't close.
  */
-async function closeAppWindow(hwnd: string): Promise<void> {
+async function closeAppWindow(hwnd: string): Promise<AppCloseResult> {
   // 1) Send WM_CLOSE gracefully
   try {
-    await runPS(`
+    const result = await runPS(`
 $sig = '[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);'
 $sig2 = '[DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);'
 $sig3 = '[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);'
@@ -353,26 +446,70 @@ if ($t::IsWindow($h)) {
   } else { Write-Output "CLOSED" }
 } else { Write-Output "GONE" }
 `, 10000);
+
+    if (result.startsWith('CLOSED')) {
+      return { hwnd, status: 'closed' };
+    }
+    if (result.startsWith('KILLED:')) {
+      return { hwnd, status: 'killed' };
+    }
+    if (result.startsWith('GONE')) {
+      return { hwnd, status: 'gone' };
+    }
+
+    return {
+      hwnd,
+      status: 'failed',
+      reason: `Unexpected close result: ${result}`,
+    };
   } catch (e) {
     console.error(`[MonCOM] closeAppWindow(${hwnd}) failed:`, e);
-    // Last resort: try taskkill by HWND lookup
+    return {
+      hwnd,
+      status: 'failed',
+      reason: e instanceof Error ? e.message : String(e),
+    };
   }
 }
 
 /**
  * Close all launched zones.
  */
-async function closeAllZones(): Promise<void> {
+async function closeAllZones(): Promise<CloseAllZonesReport> {
+  const report: CloseAllZonesReport = {
+    electronWindowsClosed: 0,
+    appWindowsAttempted: launchedAppHWNDs.size,
+    appWindowsClosedGracefully: 0,
+    appWindowsForceKilled: 0,
+    appWindowsAlreadyGone: 0,
+    appWindowsFailed: [],
+  };
+
   // Close Electron windows (URLs)
   for (const win of [...launchedWindows]) {
-    if (!win.isDestroyed()) win.close();
+    if (!win.isDestroyed()) {
+      win.close();
+      report.electronWindowsClosed += 1;
+    }
   }
   launchedWindows.length = 0;
 
   // Close tracked app windows (graceful then force)
   const closePromises = [...launchedAppHWNDs].map(hwnd => closeAppWindow(hwnd));
-  await Promise.all(closePromises);
+  const closeResults = await Promise.all(closePromises);
+  for (const result of closeResults) {
+    if (result.status === 'closed') report.appWindowsClosedGracefully += 1;
+    else if (result.status === 'killed') report.appWindowsForceKilled += 1;
+    else if (result.status === 'gone') report.appWindowsAlreadyGone += 1;
+    else {
+      report.appWindowsFailed.push({
+        hwnd: result.hwnd,
+        reason: result.reason ?? 'Unknown close failure',
+      });
+    }
+  }
   launchedAppHWNDs.clear();
+  return report;
 }
 
 /**
@@ -397,8 +534,7 @@ function hasLaunchedWindows(): boolean {
 
 export function registerWindowHandlers(ipcMain: IpcMain) {
   ipcMain.handle(IPC.LAUNCH_ZONE, async (_event, zone: Zone, monitors: any[]) => {
-    await launchZoneContent(zone, monitors);
-    return true;
+    return launchZoneContent(zone, monitors);
   });
 
   ipcMain.handle(IPC.MOVE_WINDOW, async (_event, titleHint: string, x: number, y: number, w: number, h: number) => {
@@ -406,8 +542,7 @@ export function registerWindowHandlers(ipcMain: IpcMain) {
   });
 
   ipcMain.handle(IPC.CLOSE_ALL_ZONES, async () => {
-    await closeAllZones();
-    return true;
+    return closeAllZones();
   });
 
   ipcMain.handle(IPC.FIND_WINDOWS, async () => {
@@ -426,10 +561,11 @@ export function registerWindowHandlers(ipcMain: IpcMain) {
 /**
  * Apply a preset directly from the main process (used by IPC and auto-launch).
  */
-export async function applyPresetFromMain(preset: any, screenModule: Electron.Screen): Promise<boolean> {
+export async function applyPresetFromMain(preset: any, screenModule: Electron.Screen): Promise<ApplyPresetResult> {
+  let closeReport: CloseAllZonesReport | undefined;
   // Close any existing launched windows first
   if (hasLaunchedWindows()) {
-    await closeAllZones();
+    closeReport = await closeAllZones();
   }
 
   const displays = screenModule.getAllDisplays();
@@ -441,10 +577,20 @@ export async function applyPresetFromMain(preset: any, screenModule: Electron.Sc
     height: d.bounds.height,
   }));
 
+  const results: LaunchZoneResult[] = [];
   for (const zone of preset.layout.zones) {
     if (zone.content) {
-      await launchZoneContent(zone, monitors);
+      const launchResult = await launchZoneContent(zone, monitors);
+      results.push(launchResult);
     }
   }
-  return true;
+  const failedZones = results.filter(r => !r.success);
+  const closeFailed = (closeReport?.appWindowsFailed.length ?? 0) > 0;
+
+  return {
+    success: failedZones.length === 0 && !closeFailed,
+    results,
+    failedZones,
+    closeReport,
+  };
 }

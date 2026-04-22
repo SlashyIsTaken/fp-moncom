@@ -13,6 +13,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [isApplying, setIsApplying] = useState(false);
   const [hasLaunched, setHasLaunched] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     window.moncom?.getMonitors().then(setMonitors);
@@ -24,16 +25,37 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     setIsApplying(true);
     setActivePreset(preset.id);
     try {
-      await window.moncom?.applyPreset(preset);
-      setHasLaunched(true);
+      const result = await window.moncom?.applyPreset(preset);
+      if (result) {
+        const closeFailureCount = result.closeReport?.appWindowsFailed.length ?? 0;
+        if (result.failedZones.length > 0 || closeFailureCount > 0) {
+          const parts: string[] = [];
+          if (result.failedZones.length > 0) {
+            parts.push(`${result.failedZones.length} zone(s) failed to launch`);
+          }
+          if (closeFailureCount > 0) {
+            parts.push(`${closeFailureCount} window(s) could not be closed`);
+          }
+          setStatusMessage(parts.join('. ') + '.');
+        } else {
+          setStatusMessage(null);
+        }
+      }
+      setHasLaunched(await window.moncom?.hasLaunchedWindows() ?? false);
     } catch (e) {
       console.error('Failed to apply preset:', e);
+      setStatusMessage('Failed to apply preset. See logs for details.');
     }
     setIsApplying(false);
   };
 
   const handleCloseAll = async () => {
-    await window.moncom?.closeAllZones();
+    const report = await window.moncom?.closeAllZones();
+    if (report && report.appWindowsFailed.length > 0) {
+      setStatusMessage(`${report.appWindowsFailed.length} app window(s) could not be closed cleanly.`);
+    } else {
+      setStatusMessage(null);
+    }
     setActivePreset(null);
     setHasLaunched(false);
   };
@@ -52,6 +74,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         <p className="text-sm text-text-secondary mt-1.5">
           Monitor overview and quick actions
         </p>
+        {statusMessage && (
+          <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+            {statusMessage}
+          </div>
+        )}
       </div>
 
       {/* Monitor Overview */}
