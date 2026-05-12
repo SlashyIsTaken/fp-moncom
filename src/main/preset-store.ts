@@ -18,6 +18,46 @@ function getSettingsPath(): string {
   return path.join(getDataDir(), 'settings.json');
 }
 
+function getZoneStatePath(): string {
+  return path.join(getDataDir(), 'zone-state.json');
+}
+
+export interface ZoneState {
+  /** Per-URL zoom factors (1.0 = default). Keyed by normalized URL. */
+  zoomByUrl: Record<string, number>;
+}
+
+const DEFAULT_ZONE_STATE: ZoneState = { zoomByUrl: {} };
+
+export function loadZoneState(): ZoneState {
+  try {
+    const data = fs.readFileSync(getZoneStatePath(), 'utf-8');
+    const saved = JSON.parse(data);
+    return { ...DEFAULT_ZONE_STATE, ...saved };
+  } catch {
+    return { ...DEFAULT_ZONE_STATE, zoomByUrl: {} };
+  }
+}
+
+export function saveZoneState(state: ZoneState): void {
+  fs.writeFileSync(getZoneStatePath(), JSON.stringify(state, null, 2));
+}
+
+export function getZoomForUrl(url: string): number {
+  const state = loadZoneState();
+  return state.zoomByUrl[url] ?? 1.0;
+}
+
+export function setZoomForUrl(url: string, zoomFactor: number): void {
+  const state = loadZoneState();
+  if (Math.abs(zoomFactor - 1.0) < 1e-6) {
+    delete state.zoomByUrl[url];
+  } else {
+    state.zoomByUrl[url] = zoomFactor;
+  }
+  saveZoneState(state);
+}
+
 export function loadPresets(): Preset[] {
   try {
     const data = fs.readFileSync(getPresetsPath(), 'utf-8');

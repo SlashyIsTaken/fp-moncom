@@ -6,6 +6,7 @@ await build({
   entryPoints: [
     'src/main/index.ts',
     'src/main/preload.ts',
+    'src/main/zone-preload.ts',
   ],
   bundle: true,
   platform: 'node',

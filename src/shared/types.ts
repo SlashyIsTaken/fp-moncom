@@ -128,4 +128,10 @@ export const IPC = {
   IS_ELEVATED: 'is-elevated',
   IDENTIFY_MONITOR: 'identify-monitor',
   HAS_LAUNCHED_WINDOWS: 'has-launched-windows',
+  /** Sent from URL-zone preload to step zoom in/out (delta: +1 or -1). */
+  ZONE_ZOOM_STEP: 'zone-zoom-step',
+  /** Sent from URL-zone preload to reset zoom to 1.0. */
+  ZONE_ZOOM_RESET: 'zone-zoom-reset',
+  /** Sent from URL-zone preload to toggle devtools. */
+  ZONE_TOGGLE_DEVTOOLS: 'zone-toggle-devtools',
 } as const;

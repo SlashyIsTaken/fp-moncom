@@ -1,10 +1,27 @@
 import { IpcMain, BrowserWindow, screen } from 'electron';
+import * as path from 'path';
 import { exec, execSync, spawn } from 'child_process';
 import { promisify } from 'util';
 import { IPC } from '../shared/types';
 import type { ApplyPresetResult, CloseAllZonesReport, LaunchZoneResult, Zone } from '../shared/types';
 import { playActions } from './automation-manager';
-import { loadSettings } from './preset-store';
+import { loadSettings, getZoomForUrl, setZoomForUrl } from './preset-store';
+
+/** Zoom factor steps (clamped to MIN..MAX). */
+const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0];
+const ZOOM_DEFAULT = 1.0;
+
+function stepZoom(current: number, direction: 1 | -1): number {
+  // Snap current to the nearest step, then move one step in `direction`.
+  let idx = 0;
+  let bestDiff = Infinity;
+  for (let i = 0; i < ZOOM_STEPS.length; i++) {
+    const diff = Math.abs(ZOOM_STEPS[i] - current);
+    if (diff < bestDiff) { bestDiff = diff; idx = i; }
+  }
+  const next = Math.max(0, Math.min(ZOOM_STEPS.length - 1, idx + direction));
+  return ZOOM_STEPS[next];
+}
 
 function isProcessElevated(): boolean {
   try { execSync('net session', { stdio: 'ignore' }); return true; }
@@ -15,6 +32,9 @@ const execAsync = promisify(exec);
 
 /** Track launched Electron BrowserWindows (for URLs) */
 const launchedWindows: BrowserWindow[] = [];
+
+/** Map webContents.id → the normalized URL that zone was launched with (used to persist zoom by URL). */
+const zoneUrlByWebContentsId = new Map<number, string>();
 
 /** Track launched app HWNDs (for executables — used to close them later) */
 const launchedAppHWNDs: Set<string> = new Set();
@@ -96,6 +116,10 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Dedicated persistent partition for zone sites: localStorage, cookies,
+      // IndexedDB etc. survive app restarts and stay isolated from MonCOM's UI.
+      partition: 'persist:moncom-zones',
+      preload: path.join(__dirname, 'zone-preload.js'),
     },
   });
 
@@ -107,18 +131,33 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
   console.log(`[MonCOM] Actual bounds:    (${actual.x}, ${actual.y}, ${actual.width}, ${actual.height})`);
 
   const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  zoneUrlByWebContentsId.set(win.webContents.id, normalizedUrl);
   win.loadURL(normalizedUrl);
   win.removeMenu();
 
   // Hide scrollbars visually but keep scrolling functional
   const scrollbarCSS = `::-webkit-scrollbar { display: none !important; }
     html, body { scrollbar-width: none !important; }`;
-  win.webContents.on('did-finish-load', () => { win.webContents.insertCSS(scrollbarCSS); });
-  win.webContents.on('did-navigate', () => { win.webContents.insertCSS(scrollbarCSS); });
+
+  // zoomFactor resets on every navigation, so re-apply on every load.
+  const applyPersistedZoom = () => {
+    const stored = getZoomForUrl(normalizedUrl);
+    win.webContents.setZoomFactor(stored);
+  };
+
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.insertCSS(scrollbarCSS);
+    applyPersistedZoom();
+  });
+  win.webContents.on('did-navigate', () => {
+    win.webContents.insertCSS(scrollbarCSS);
+    applyPersistedZoom();
+  });
 
   launchedWindows.push(win);
 
   win.on('closed', () => {
+    zoneUrlByWebContentsId.delete(win.webContents.id);
     const idx = launchedWindows.indexOf(win);
     if (idx >= 0) launchedWindows.splice(idx, 1);
   });
@@ -555,6 +594,34 @@ export function registerWindowHandlers(ipcMain: IpcMain) {
 
   ipcMain.handle(IPC.HAS_LAUNCHED_WINDOWS, () => {
     return hasLaunchedWindows();
+  });
+
+  ipcMain.on(IPC.ZONE_ZOOM_STEP, (event, delta: number) => {
+    const wc = event.sender;
+    const url = zoneUrlByWebContentsId.get(wc.id);
+    if (!url) return;
+    const direction: 1 | -1 = delta > 0 ? 1 : -1;
+    const current = wc.getZoomFactor();
+    const next = stepZoom(current, direction);
+    if (next !== current) {
+      wc.setZoomFactor(next);
+      setZoomForUrl(url, next);
+    }
+  });
+
+  ipcMain.on(IPC.ZONE_ZOOM_RESET, (event) => {
+    const wc = event.sender;
+    const url = zoneUrlByWebContentsId.get(wc.id);
+    if (!url) return;
+    wc.setZoomFactor(ZOOM_DEFAULT);
+    setZoomForUrl(url, ZOOM_DEFAULT);
+  });
+
+  ipcMain.on(IPC.ZONE_TOGGLE_DEVTOOLS, (event) => {
+    const wc = event.sender;
+    if (!zoneUrlByWebContentsId.has(wc.id)) return;
+    if (wc.isDevToolsOpened()) wc.closeDevTools();
+    else wc.openDevTools({ mode: 'detach' });
   });
 }
 
