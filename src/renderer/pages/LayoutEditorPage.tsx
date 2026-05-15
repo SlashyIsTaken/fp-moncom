@@ -81,11 +81,13 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
     }
   }, [editingPreset]);
 
-  const applyTemplate = useCallback((monitorId: string, template: SplitTemplate) => {
+  const applyTemplate = useCallback((monitor: MonitorInfo, template: SplitTemplate) => {
     setZones(prev => {
-      const others = prev.filter(z => z.monitorId !== monitorId);
+      const others = prev.filter(z => z.monitorId !== monitor.id);
       const newZones = template.zones.map(z => ({
-        id: makeZoneId(), monitorId,
+        id: makeZoneId(),
+        monitorId: monitor.id,
+        monitorBounds: { x: monitor.x, y: monitor.y, width: monitor.width, height: monitor.height },
         x: z.x, y: z.y, width: z.width, height: z.height,
         content: null,
       }));
@@ -106,10 +108,18 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
   const handleSavePreset = async () => {
     if (!presetName.trim()) return;
     const now = new Date().toISOString();
+    // Snapshot the monitor's bounds with each zone so we can rematch the zone
+    // if the monitor ID ever shifts (resolution change, monitor rearrangement).
+    const zonesWithBounds = zones.map(z => {
+      const m = monitors.find(mm => mm.id === z.monitorId);
+      return m
+        ? { ...z, monitorBounds: { x: m.x, y: m.y, width: m.width, height: m.height } }
+        : z;
+    });
     const preset: Preset = {
       id: editingId || `preset-${Date.now()}`,
       name: presetName.trim(),
-      layout: { id: editingId ? `layout-${editingId}` : `layout-${Date.now()}`, zones },
+      layout: { id: editingId ? `layout-${editingId}` : `layout-${Date.now()}`, zones: zonesWithBounds },
       createdAt: editingPreset?.createdAt || now,
       updatedAt: now,
     };
@@ -273,7 +283,7 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
                     {splitTemplates.map((tmpl) => (
                       <button
                         key={tmpl.name}
-                        onClick={() => applyTemplate(m.id, tmpl)}
+                        onClick={() => applyTemplate(m, tmpl)}
                         className="flex items-center gap-2 px-3.5 py-2 bg-bg-dark border border-border rounded-lg text-xs text-text-secondary hover:border-commander/50 hover:text-commander transition-all"
                       >
                         <tmpl.icon className="w-3.5 h-3.5" />

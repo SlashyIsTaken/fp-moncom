@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, nativeImage, di
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { registerWindowHandlers, applyPresetFromMain } from './window-manager';
-import { registerPresetHandlers, loadSettings, loadPresets } from './preset-store';
+import { registerPresetHandlers, loadSettings, loadPresets, monitorIdFromBounds } from './preset-store';
 import { startRecording, stopRecording, playActions } from './automation-manager';
 import type { MonitorInfo } from '../shared/types';
 import { IPC } from '../shared/types';
@@ -142,7 +142,7 @@ function getMonitors(): MonitorInfo[] {
   const primary = screen.getPrimaryDisplay();
 
   return displays.map((d, i) => ({
-    id: `monitor-${d.id}`,
+    id: monitorIdFromBounds(d.bounds),
     name: `Monitor ${i + 1}${d.id === primary.id ? ' (Primary)' : ''}`,
     x: d.bounds.x,
     y: d.bounds.y,

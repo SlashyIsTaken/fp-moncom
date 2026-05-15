@@ -5,7 +5,7 @@ import { promisify } from 'util';
 import { IPC } from '../shared/types';
 import type { ApplyPresetResult, CloseAllZonesReport, LaunchZoneResult, Zone } from '../shared/types';
 import { playActions } from './automation-manager';
-import { loadSettings, getZoomForUrl, setZoomForUrl } from './preset-store';
+import { loadSettings, getZoomForUrl, setZoomForUrl, monitorIdFromBounds, migrateAndPersistPreset } from './preset-store';
 
 /** Zoom factor steps (clamped to MIN..MAX). */
 const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0];
@@ -637,15 +637,20 @@ export async function applyPresetFromMain(preset: any, screenModule: Electron.Sc
 
   const displays = screenModule.getAllDisplays();
   const monitors = displays.map((d, i) => ({
-    id: `monitor-${d.id}`,
+    id: monitorIdFromBounds(d.bounds),
     x: d.bounds.x,
     y: d.bounds.y,
     width: d.bounds.width,
     height: d.bounds.height,
   }));
 
+  // Rematch any zones whose monitorId is stale (e.g., post-reboot when display
+  // IDs shift, or after the user reorganized their monitors). Persists changes
+  // when the preset is a saved one so the renderer also sees the corrected IDs.
+  const migrated = migrateAndPersistPreset(preset, monitors);
+
   const results: LaunchZoneResult[] = [];
-  for (const zone of preset.layout.zones) {
+  for (const zone of migrated.layout.zones) {
     if (zone.content) {
       const launchResult = await launchZoneContent(zone, monitors);
       results.push(launchResult);

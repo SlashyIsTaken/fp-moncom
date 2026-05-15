@@ -14,6 +14,13 @@ export interface MonitorInfo {
 export interface Zone {
   id: string;
   monitorId: string;
+  /**
+   * Absolute bounds of the monitor at the time this zone was saved. Used to
+   * relocate the zone if `monitorId` no longer matches any current monitor
+   * (e.g., after a reboot where the OS reassigned display IDs). Optional for
+   * backwards-compat with presets created before this field existed.
+   */
+  monitorBounds?: { x: number; y: number; width: number; height: number };
   /** Position relative to the monitor's top-left (0-1 normalized) */
   x: number;
   y: number;
