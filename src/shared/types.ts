@@ -29,17 +29,24 @@ export interface Zone {
   content: ZoneContent | null;
 }
 
+/** Modifier keys held during a key action. */
+export type KeyModifier = 'ctrl' | 'alt' | 'shift' | 'win';
+
 /** A recorded automation action to replay after zone content launches */
 export interface AutomationAction {
-  type: 'click' | 'right-click' | 'key' | 'type';
-  /** X position relative to zone (0-1), for click actions */
+  type: 'click' | 'right-click' | 'key' | 'type' | 'scroll';
+  /** X position relative to zone (0-1), for click/scroll actions */
   x?: number;
-  /** Y position relative to zone (0-1), for click actions */
+  /** Y position relative to zone (0-1), for click/scroll actions */
   y?: number;
   /** Virtual key code, for key actions */
   vkCode?: number;
+  /** Modifier keys held during a key action, e.g. ['ctrl'] for Ctrl+T */
+  modifiers?: KeyModifier[];
   /** Text to type, for type actions */
   text?: string;
+  /** Wheel notches for scroll actions; positive = up, negative = down */
+  deltaY?: number;
   /** Delay in ms before this action executes */
   delay: number;
 }

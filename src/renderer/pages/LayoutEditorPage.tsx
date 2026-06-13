@@ -620,6 +620,12 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
     if (recorded && recorded.length > 0) {
       onActionsChange([...actions, ...recorded]);
     }
+    // Tear down the window we launched to capture actions — it shouldn't linger
+    // after recording stops. closeAllZones only touches MonCOM-launched windows.
+    const closeReport = await window.moncom?.closeAllZones();
+    if (closeReport && closeReport.appWindowsFailed.length > 0) {
+      setStatusMessage(`${closeReport.appWindowsFailed.length} window(s) could not be closed after recording.`);
+    }
   };
 
   const handlePlay = async () => {

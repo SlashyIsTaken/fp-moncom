@@ -1,5 +1,8 @@
 import { ChildProcess, spawn } from 'child_process';
-import type { AutomationAction, Zone } from '../shared/types';
+import type { AutomationAction, KeyModifier, Zone } from '../shared/types';
+import * as input from './input';
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 let recordingProcess: ChildProcess | null = null;
 let recordedActions: AutomationAction[] = [];
@@ -14,45 +17,6 @@ function getZoneBounds(zone: Zone, monitors: any[]): { x: number; y: number; w: 
     w: Math.round(zone.width * monitor.width),
     h: Math.round(zone.height * monitor.height),
   };
-}
-
-/**
- * Run a PowerShell script via stdin and return stdout.
- */
-function runPS(script: string, timeout = 30000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '-'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-
-    let stdout = '';
-    let stderr = '';
-    const timer = setTimeout(() => {
-      child.kill();
-      reject(new Error('PowerShell timeout'));
-    }, timeout);
-
-    child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
-    child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
-
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (code !== 0 && !stdout.trim()) {
-        reject(new Error(`PowerShell exit ${code}: ${stderr.trim()}`));
-      } else {
-        resolve(stdout.trim());
-      }
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-
-    child.stdin.write(script);
-    child.stdin.end();
-  });
 }
 
 // ─── C# type for input recording (global mouse + keyboard hooks) ───
@@ -199,99 +163,6 @@ public class InputRecorder {
 "@
 `;
 
-// ─── C# type for input playback ───
-
-const PLAYER_TYPE = `
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-using System.Threading;
-
-public class InputPlayer {
-    [DllImport("user32.dll")]
-    public static extern bool SetCursorPos(int X, int Y);
-
-    [DllImport("user32.dll")]
-    public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, IntPtr dwExtraInfo);
-
-    [DllImport("user32.dll")]
-    public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, IntPtr dwExtraInfo);
-
-    [DllImport("user32.dll")]
-    public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-
-    public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
-    public const uint MOUSEEVENTF_LEFTUP = 0x0004;
-    public const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
-    public const uint MOUSEEVENTF_RIGHTUP = 0x0010;
-    public const uint KEYEVENTF_KEYUP = 0x0002;
-    public const uint KEYEVENTF_UNICODE = 0x0004;
-    public const uint INPUT_KEYBOARD = 1;
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct INPUT {
-        public uint type;
-        public INPUTUNION U;
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    public struct INPUTUNION {
-        [FieldOffset(0)] public KEYBDINPUT ki;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct KEYBDINPUT {
-        public ushort wVk;
-        public ushort wScan;
-        public uint dwFlags;
-        public uint time;
-        public IntPtr dwExtraInfo;
-    }
-
-    public static void Click(int x, int y) {
-        SetCursorPos(x, y);
-        Thread.Sleep(30);
-        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, IntPtr.Zero);
-        Thread.Sleep(20);
-        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, IntPtr.Zero);
-    }
-
-    public static void RightClick(int x, int y) {
-        SetCursorPos(x, y);
-        Thread.Sleep(30);
-        mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, IntPtr.Zero);
-        Thread.Sleep(20);
-        mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, IntPtr.Zero);
-    }
-
-    public static void KeyPress(byte vk) {
-        keybd_event(vk, 0, 0, IntPtr.Zero);
-        Thread.Sleep(20);
-        keybd_event(vk, 0, KEYEVENTF_KEYUP, IntPtr.Zero);
-    }
-
-    public static void TypeText(string text) {
-        foreach (char c in text) {
-            var inputs = new INPUT[2];
-
-            inputs[0].type = INPUT_KEYBOARD;
-            inputs[0].U.ki.wVk = 0;
-            inputs[0].U.ki.wScan = c;
-            inputs[0].U.ki.dwFlags = KEYEVENTF_UNICODE;
-
-            inputs[1].type = INPUT_KEYBOARD;
-            inputs[1].U.ki.wVk = 0;
-            inputs[1].U.ki.wScan = c;
-            inputs[1].U.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-
-            SendInput(2, inputs, Marshal.SizeOf(typeof(INPUT)));
-            Thread.Sleep(15);
-        }
-    }
-}
-"@
-`;
-
 // ─── Recording ───
 
 /**
@@ -401,58 +272,54 @@ export function isRecording(): boolean {
 // ─── Playback ───
 
 /**
- * Build a PowerShell script that replays the given actions within the given bounds.
+ * Play back automation actions within a zone's bounds using the native input
+ * module. `startIndex` supports "test from step N" (skips earlier actions).
  */
-function buildPlaybackScript(actions: AutomationAction[], bounds: { x: number; y: number; w: number; h: number }): string {
-  const lines: string[] = [PLAYER_TYPE, ''];
-
-  for (const action of actions) {
-    if (action.delay > 0) {
-      lines.push(`Start-Sleep -Milliseconds ${action.delay}`);
-    }
-
-    switch (action.type) {
-      case 'click': {
-        const absX = Math.round(bounds.x + (action.x || 0) * bounds.w);
-        const absY = Math.round(bounds.y + (action.y || 0) * bounds.h);
-        lines.push(`[InputPlayer]::Click(${absX}, ${absY})`);
-        break;
-      }
-      case 'right-click': {
-        const absX = Math.round(bounds.x + (action.x || 0) * bounds.w);
-        const absY = Math.round(bounds.y + (action.y || 0) * bounds.h);
-        lines.push(`[InputPlayer]::RightClick(${absX}, ${absY})`);
-        break;
-      }
-      case 'key': {
-        lines.push(`[InputPlayer]::KeyPress(${action.vkCode || 0})`);
-        break;
-      }
-      case 'type': {
-        const safe = (action.text || '').replace(/'/g, "''");
-        lines.push(`[InputPlayer]::TypeText('${safe}')`);
-        break;
-      }
-    }
-  }
-
-  lines.push('Write-Output "DONE"');
-  return lines.join('\n');
-}
-
-/**
- * Play back a list of automation actions within a zone's bounds.
- */
-export async function playActions(actions: AutomationAction[], zone: Zone, monitors: any[]): Promise<boolean> {
+export async function playActions(
+  actions: AutomationAction[],
+  zone: Zone,
+  monitors: any[],
+  startIndex = 0,
+): Promise<boolean> {
   if (!actions || actions.length === 0) return true;
-
   const bounds = getZoneBounds(zone, monitors);
-  const script = buildPlaybackScript(actions, bounds);
 
   try {
-    const result = await runPS(script, 120000); // 2 min timeout for long sequences
-    console.log(`[MonCOM] Playback completed: ${result}`);
-    return result.includes('DONE');
+    for (let i = Math.max(0, startIndex); i < actions.length; i++) {
+      const a = actions[i];
+      if (a.delay > 0) await sleep(a.delay);
+
+      const absX = Math.round(bounds.x + (a.x ?? 0) * bounds.w);
+      const absY = Math.round(bounds.y + (a.y ?? 0) * bounds.h);
+
+      switch (a.type) {
+        case 'click':
+        case 'right-click': {
+          const button = a.type === 'right-click' ? 'right' : 'left';
+          input.setCursorPos(absX, absY);
+          await sleep(25);
+          input.mouseButton(button, true);
+          await sleep(20);
+          input.mouseButton(button, false);
+          break;
+        }
+        case 'scroll': {
+          input.setCursorPos(absX, absY);
+          input.mouseWheel(a.deltaY ?? 0);
+          break;
+        }
+        case 'key': {
+          input.keyTap(a.vkCode ?? 0, (a.modifiers ?? []) as KeyModifier[]);
+          break;
+        }
+        case 'type': {
+          input.typeText(a.text ?? '');
+          break;
+        }
+      }
+    }
+    console.log('[MonCOM] Playback completed');
+    return true;
   } catch (e) {
     console.error('[MonCOM] Playback failed:', e);
     return false;
