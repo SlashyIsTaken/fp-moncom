@@ -3,26 +3,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { IPC } from '../shared/types';
 import type { Preset, AppSettings, Zone } from '../shared/types';
+import { getStableMonitors } from './monitors';
 
 interface MonitorBounds { x: number; y: number; width: number; height: number }
 
-/**
- * Stable monitor ID derived from the monitor's top-left position. Survives
- * reboots and driver enumeration order changes, unlike Electron's `display.id`.
- */
-export function monitorIdFromBounds(bounds: MonitorBounds): string {
-  return `monitor-${bounds.x}_${bounds.y}`;
-}
+// Monitor identity (stable hardware ids + position fallback) lives in monitors.ts.
 
 /** Current monitor list with stable IDs (main-process snapshot). */
 function snapshotMonitors(): { id: string; x: number; y: number; width: number; height: number }[] {
-  return screen.getAllDisplays().map(d => ({
-    id: monitorIdFromBounds(d.bounds),
-    x: d.bounds.x,
-    y: d.bounds.y,
-    width: d.bounds.width,
-    height: d.bounds.height,
-  }));
+  return getStableMonitors(screen).map(m => ({ id: m.id, x: m.x, y: m.y, width: m.width, height: m.height }));
 }
 
 /**

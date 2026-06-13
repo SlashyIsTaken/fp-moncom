@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Monitor, Save, Trash2, Play, Globe, AppWindow, Grid2x2, Grid3x3, Columns2, Rows2, Check, FolderOpen, Circle, Square, MousePointerClick, Keyboard, Type, X } from 'lucide-react';
 import { Tooltip } from '../components/Tooltip';
 import type { MonitorInfo, Zone, ZoneContent, Preset, AutomationAction } from '../../shared/types';
+import { formatApplyResult } from '../applyResultMessage';
 
 type SplitTemplate = {
   name: string;
@@ -142,20 +143,7 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
     };
     const result = await window.moncom?.applyPreset(preset);
     if (!result) return;
-
-    const closeFailureCount = result.closeReport?.appWindowsFailed.length ?? 0;
-    if (result.failedZones.length > 0 || closeFailureCount > 0) {
-      const parts: string[] = [];
-      if (result.failedZones.length > 0) {
-        parts.push(`${result.failedZones.length} zone(s) failed to launch`);
-      }
-      if (closeFailureCount > 0) {
-        parts.push(`${closeFailureCount} existing window(s) could not be closed`);
-      }
-      setApplyStatus(parts.join('. ') + '.');
-    } else {
-      setApplyStatus(null);
-    }
+    setApplyStatus(formatApplyResult(result));
   };
 
   // Monitor map viewport

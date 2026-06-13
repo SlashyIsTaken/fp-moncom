@@ -12,7 +12,9 @@ await build({
   platform: 'node',
   target: 'node20',
   outdir: 'dist/main',
-  external: ['electron'],
+  // 'electron' resolves to the runtime's built-in module; 'koffi' is a native
+  // addon (loads a prebuilt .node) and must be required from node_modules, not bundled.
+  external: ['electron', 'koffi'],
   format: 'cjs',
   sourcemap: true,
 });

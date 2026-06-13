@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Play, Trash2, Clock, Layers, Bookmark, Pencil } from 'lucide-react';
 import type { Preset } from '../../shared/types';
 import type { Page } from '../App';
+import { formatApplyResult } from '../applyResultMessage';
 
 interface PresetsPageProps {
   onNavigate: (page: Page) => void;
@@ -12,6 +13,7 @@ export function PresetsPage({ onNavigate, onEditPreset }: PresetsPageProps) {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [applying, setApplying] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     window.moncom?.getPresets().then(setPresets);
@@ -19,8 +21,15 @@ export function PresetsPage({ onNavigate, onEditPreset }: PresetsPageProps) {
 
   const handleApply = async (preset: Preset) => {
     setApplying(preset.id);
-    try { await window.moncom?.applyPreset(preset); }
-    finally { setApplying(null); }
+    try {
+      const result = await window.moncom?.applyPreset(preset);
+      setStatusMessage(formatApplyResult(result));
+    } catch (e) {
+      console.error('Failed to apply preset:', e);
+      setStatusMessage('Failed to apply preset. See logs for details.');
+    } finally {
+      setApplying(null);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -48,6 +57,12 @@ export function PresetsPage({ onNavigate, onEditPreset }: PresetsPageProps) {
           <Layers className="w-4 h-4" /> New Layout
         </button>
       </div>
+
+      {statusMessage && (
+        <div className="mb-6 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+          {statusMessage}
+        </div>
+      )}
 
       {presets.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

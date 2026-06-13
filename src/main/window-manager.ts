@@ -1,11 +1,20 @@
 import { IpcMain, BrowserWindow, screen } from 'electron';
 import * as path from 'path';
-import { exec, execSync, spawn } from 'child_process';
-import { promisify } from 'util';
+import { execSync, spawn } from 'child_process';
 import { IPC } from '../shared/types';
 import type { ApplyPresetResult, CloseAllZonesReport, LaunchZoneResult, Zone } from '../shared/types';
 import { playActions } from './automation-manager';
-import { loadSettings, getZoomForUrl, setZoomForUrl, monitorIdFromBounds, migrateAndPersistPreset } from './preset-store';
+import { loadSettings, getZoomForUrl, setZoomForUrl, migrateAndPersistPreset } from './preset-store';
+import { getStableMonitors } from './monitors';
+import {
+  enumWindows,
+  waitForWindow,
+  moveWindowToVisibleRect,
+  postClose,
+  isWindow,
+  type WindowInfo,
+  type WindowMatcher,
+} from './win32';
 
 /** Zoom factor steps (clamped to MIN..MAX). */
 const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0];
@@ -28,7 +37,13 @@ function isProcessElevated(): boolean {
   catch { return false; }
 }
 
-const execAsync = promisify(exec);
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Lowercased exe base name without extension, e.g. "C:\…\Spotify.exe" → "spotify". */
+function exeBaseName(target: string): string {
+  const parts = target.replace(/\\/g, '/').split('/');
+  return (parts[parts.length - 1]?.replace(/\.(exe|lnk|bat|cmd)$/i, '') || '').toLowerCase();
+}
 
 /** Track launched Electron BrowserWindows (for URLs) */
 const launchedWindows: BrowserWindow[] = [];
@@ -36,62 +51,14 @@ const launchedWindows: BrowserWindow[] = [];
 /** Map webContents.id → the normalized URL that zone was launched with (used to persist zoom by URL). */
 const zoneUrlByWebContentsId = new Map<number, string>();
 
-/** Track launched app HWNDs (for executables — used to close them later) */
-const launchedAppHWNDs: Set<string> = new Set();
+/** Track launched app windows we own → hwnd→pid, so we can close them later. */
+const launchedAppWindows = new Map<number, number>();
 
 type AppCloseResult = {
-  hwnd: string;
+  hwnd: number;
   status: 'closed' | 'killed' | 'gone' | 'failed';
   reason?: string;
 };
-
-type VisibleWindowInfo = {
-  hwnd: string;
-  pid: number;
-  processName: string;
-  title: string;
-};
-
-/**
- * Run a PowerShell command passed as an argument (not stdin).
- */
-function runPS(script: string, timeout = 15000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('powershell.exe', [
-      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script,
-    ], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-
-    let stdout = '';
-    let stderr = '';
-    const timer = setTimeout(() => {
-      child.kill();
-      reject(new Error('PowerShell timeout'));
-    }, timeout);
-
-    child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
-    child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
-
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (stderr.trim()) {
-        console.error(`[MonCOM] PowerShell stderr: ${stderr.trim()}`);
-      }
-      if (code !== 0 && !stdout.trim()) {
-        reject(new Error(`PowerShell exit ${code}: ${stderr.trim()}`));
-      } else {
-        resolve(stdout.trim());
-      }
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-  });
-}
 
 // ─── URL zones: use Electron BrowserWindow ───
 
@@ -131,7 +98,10 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
   console.log(`[MonCOM] Actual bounds:    (${actual.x}, ${actual.y}, ${actual.width}, ${actual.height})`);
 
   const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-  zoneUrlByWebContentsId.set(win.webContents.id, normalizedUrl);
+  // Capture the id now — accessing win.webContents inside the 'closed' handler
+  // throws "Object has been destroyed".
+  const wcId = win.webContents.id;
+  zoneUrlByWebContentsId.set(wcId, normalizedUrl);
   win.loadURL(normalizedUrl);
   win.removeMenu();
 
@@ -157,7 +127,7 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
   launchedWindows.push(win);
 
   win.on('closed', () => {
-    zoneUrlByWebContentsId.delete(win.webContents.id);
+    zoneUrlByWebContentsId.delete(wcId);
     const idx = launchedWindows.indexOf(win);
     if (idx >= 0) launchedWindows.splice(idx, 1);
   });
@@ -165,103 +135,36 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
   console.log(`[MonCOM] Opened URL zone: ${url} at (${x}, ${y}, ${w}, ${h})`);
 }
 
-// ─── App zones: launch exe + move via Win32 ───
+// ─── App zones: launch exe + move via native Win32 ───
 
 /**
- * Get all visible window MainWindowHandles via Get-Process (pure PowerShell, no Add-Type).
+ * Resolve which window an app launch should position.
+ *
+ * Phase 1 default: wait for a *new* window (not present before launch) belonging
+ * to the launched exe; if the launcher spawns a differently-named process, accept
+ * any new titled window. This is the seam the future App Profiles step replaces —
+ * a profile supplies its own multi-step matcher sequence (e.g. DSS: ack a warning
+ * dialog → wait for the login window → position the real window). The contract is
+ * just: given the pre-launch window set, return the WindowInfo to position.
  */
-async function getVisibleWindows(): Promise<VisibleWindowInfo[]> {
-  const ps = `Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne '' } | Select-Object @{Name='Hwnd';Expression={$_.MainWindowHandle.ToInt64()}}, Id, ProcessName, MainWindowTitle | ConvertTo-Json -Compress`;
-  try {
-    const stdout = await runPS(ps);
-    console.log(`[MonCOM] getVisibleWindows raw output: "${stdout.substring(0, 200)}"`);
-    if (!stdout || stdout === '[]') return [];
-    const data = JSON.parse(stdout);
-    const arr: any[] = Array.isArray(data) ? data : [data];
-    return arr.map((entry: any) => ({
-      hwnd: String(entry.Hwnd),
-      pid: Number(entry.Id ?? 0),
-      processName: String(entry.ProcessName ?? ''),
-      title: String(entry.MainWindowTitle ?? ''),
-    }));
-  } catch (e) {
-    console.error('[MonCOM] getVisibleWindows failed:', e);
-    return [];
-  }
+async function resolveTargetWindow(
+  exeName: string,
+  before: Set<number>,
+  timeoutMs: number,
+): Promise<WindowInfo | null> {
+  const isNew: WindowMatcher = (w) => !before.has(w.hwnd);
+  const isNewFromExe: WindowMatcher = (w) => isNew(w) && !!exeName && w.processName === exeName;
+
+  // Prefer a new window from the target process…
+  const fromExe = await waitForWindow(isNewFromExe, { timeoutMs, intervalMs: 250 });
+  if (fromExe) return fromExe;
+  // …otherwise accept any new titled window that appeared (covers launcher shims).
+  return waitForWindow(isNew, { timeoutMs: 3000, intervalMs: 250 });
 }
 
 /**
- * Move a window by title match using PowerShell UIAutomation-free approach.
- * Uses Get-Process to find, then .NET interop inline for MoveWindow only.
- */
-async function moveWindowByTitle(titleHint: string, x: number, y: number, width: number, height: number): Promise<boolean> {
-  const safe = titleHint.replace(/'/g, "''").replace(/"/g, '`"');
-  // Compensate for Windows 10/11 invisible DWM borders (~8px on left/right/bottom)
-  const border = 8;
-  const ax = x - border;
-  const ay = y;
-  const aw = width + border * 2;
-  const ah = height + border;
-  const ps = `
-$p = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like '*${safe}*' } | Select-Object -First 1
-if ($p) {
-  $hwnd = $p.MainWindowHandle
-  $sig = '[DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int ht, bool r);'
-  $sig2 = '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);'
-  $sig3 = '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);'
-  $t = Add-Type -MemberDefinition ($sig + $sig2 + $sig3) -Name WinMove -Namespace MonCOM -PassThru -ErrorAction SilentlyContinue
-  if (-not $t) { $t = [MonCOM.WinMove] }
-  $t::ShowWindow($hwnd, 9) | Out-Null
-  $t::MoveWindow($hwnd, ${ax}, ${ay}, ${aw}, ${ah}, $true) | Out-Null
-  $t::SetForegroundWindow($hwnd) | Out-Null
-  Write-Output "OK:$($p.MainWindowTitle)"
-} else {
-  Write-Output "NOT_FOUND"
-}
-`;
-  try {
-    const result = await runPS(ps);
-    console.log(`[MonCOM] moveWindowByTitle("${titleHint}"): ${result}`);
-    return result.includes('OK');
-  } catch (e) {
-    console.error(`[MonCOM] moveWindowByTitle("${titleHint}") failed:`, e);
-    return false;
-  }
-}
-
-/**
- * Move a window by HWND.
- */
-async function moveWindowByHWND(hwnd: string, x: number, y: number, width: number, height: number): Promise<boolean> {
-  // Compensate for Windows 10/11 invisible DWM borders (~8px on left/right/bottom)
-  const border = 8;
-  const ax = x - border;
-  const ay = y;
-  const aw = width + border * 2;
-  const ah = height + border;
-  const ps = `
-$sig = '[DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int ht, bool r);'
-$sig2 = '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);'
-$sig3 = '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);'
-$t = Add-Type -MemberDefinition ($sig + $sig2 + $sig3) -Name WinMoveH -Namespace MonCOM -PassThru -ErrorAction SilentlyContinue
-if (-not $t) { $t = [MonCOM.WinMoveH] }
-$h = [IntPtr]::new(${hwnd})
-$t::ShowWindow($h, 9) | Out-Null
-$t::MoveWindow($h, ${ax}, ${ay}, ${aw}, ${ah}, $true) | Out-Null
-$t::SetForegroundWindow($h) | Out-Null
-Write-Output "OK"
-`;
-  try {
-    const result = await runPS(ps);
-    return result.includes('OK');
-  } catch (e) {
-    console.error(`[MonCOM] moveWindowByHWND(${hwnd}) failed:`, e);
-    return false;
-  }
-}
-
-/**
- * Launch an application and try to position its window.
+ * Launch an application and position its window.
+ * Returns the owned window (hwnd/pid) on success so the caller can track it for close.
  */
 async function launchAppZone(
   target: string,
@@ -270,37 +173,29 @@ async function launchAppZone(
   y: number,
   w: number,
   h: number,
-): Promise<{ success: boolean; error?: string }> {
-  // Snapshot windows before launch to detect "new window" vs "already-running/single-instance reuse".
-  const windowsBefore = await getVisibleWindows();
-  const hwndsBefore = new Set(windowsBefore.map(wi => wi.hwnd));
-  console.log(`[MonCOM] Launching app: ${target} (${windowsBefore.length} existing windows)`);
+): Promise<{ success: boolean; error?: string; hwnd?: number; pid?: number }> {
+  // Snapshot windows before launch to distinguish "new window" from single-instance reuse.
+  const before = new Set(enumWindows({ requireTitle: false }).map((wi) => wi.hwnd));
+  const exeName = exeBaseName(target);
+  console.log(`[MonCOM] Launching app: ${target} (${before.size} existing windows)`);
 
-  const parts = target.replace(/\\/g, '/').split('/');
-  const exeName = (parts[parts.length - 1]?.replace(/\.(exe|lnk|bat|cmd)$/i, '') || '').toLowerCase();
+  const settings = loadSettings();
+  const elevated = isProcessElevated();
+  const runAsUac = settings.runAsAdmin && !elevated;
 
   try {
-    const settings = loadSettings();
-    const elevated = isProcessElevated();
-
-    if (settings.runAsAdmin && !elevated) {
-      // MonCOM is not elevated but user wants admin launch — use RunAs (triggers UAC)
+    if (runAsUac) {
+      // MonCOM is not elevated but the user wants an elevated launch — RunAs triggers UAC.
       const child = spawn('powershell.exe', [
         '-NoProfile', '-NonInteractive', '-Command',
         `Start-Process -FilePath '${target.replace(/'/g, "''")}' -Verb RunAs`,
-      ], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true,
-      });
+      ], { detached: true, stdio: 'ignore', windowsHide: true });
       child.unref();
       console.log('[MonCOM] Launched with RunAs (UAC prompt expected — MonCOM is not elevated)');
     } else {
-      // Either runAsAdmin is off, or MonCOM is already elevated (child inherits elevation)
+      // Either runAsAdmin is off, or MonCOM is already elevated (child inherits elevation).
       const child = spawn('cmd.exe', ['/c', 'start', '', target], {
-        detached: true,
-        stdio: 'ignore',
-        shell: false,
+        detached: true, stdio: 'ignore', shell: false,
       });
       child.unref();
     }
@@ -309,77 +204,65 @@ async function launchAppZone(
     return { success: false, error: `Application launch failed: ${target}` };
   }
 
-  // Poll for new window (every 500ms, up to 16 seconds when RunAs is used to account for UAC delay)
-  const settings = loadSettings();
-  const maxAttempts = (settings.runAsAdmin && !isProcessElevated()) ? 32 : 16;
-  let latestWindows: VisibleWindowInfo[] = windowsBefore;
-  let newWindows: VisibleWindowInfo[] = [];
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await new Promise(r => setTimeout(r, 500));
-    latestWindows = await getVisibleWindows();
-    newWindows = latestWindows.filter(win => !hwndsBefore.has(win.hwnd));
-    if (newWindows.length > 0) {
-      console.log(`[MonCOM] Found ${newWindows.length} new app window(s) after ${(attempt + 1) * 500}ms`);
-      break;
-    }
+  // Allow extra time when a UAC prompt is in the path.
+  const timeoutMs = runAsUac ? 22000 : 12000;
+  const target1 = await resolveTargetWindow(exeName, before, timeoutMs);
+
+  if (target1) {
+    console.log(`[MonCOM] Positioning new window hwnd=${target1.hwnd} (${target1.processName} "${target1.title}")`);
+    const moved = moveWindowToVisibleRect(target1.hwnd, x, y, w, h, { foreground: true });
+    if (moved) return { success: true, hwnd: target1.hwnd, pid: target1.pid };
+    console.log('[MonCOM] Move failed (likely UIPI: target window is elevated and MonCOM is not).');
   }
 
-  if (newWindows.length > 0) {
-    for (const windowInfo of newWindows) {
-      console.log(`[MonCOM] Moving new app HWND ${windowInfo.hwnd} (${windowInfo.processName})`);
-      launchedAppHWNDs.add(windowInfo.hwnd);
-      const moved = await moveWindowByHWND(windowInfo.hwnd, x, y, w, h);
-      console.log(`[MonCOM] Move result: ${moved}`);
-      if (moved) return { success: true };
-    }
-  }
-
-  // Predictable single-instance strategy:
-  // if no new HWND was detected, try to reuse a visible window belonging to the target process.
+  // Single-instance strategy: no new window appeared (Spotify/Discord/Teams style) —
+  // reposition an existing window of the same process instead of failing.
   if (exeName) {
-    const candidates = latestWindows
-      .filter(win => win.processName.toLowerCase() === exeName)
-      .sort((a, b) => {
-        const aWasPresentBeforeLaunch = hwndsBefore.has(a.hwnd) ? 0 : 1;
-        const bWasPresentBeforeLaunch = hwndsBefore.has(b.hwnd) ? 0 : 1;
-        if (aWasPresentBeforeLaunch !== bWasPresentBeforeLaunch) {
-          return aWasPresentBeforeLaunch - bWasPresentBeforeLaunch;
-        }
-        return a.pid - b.pid || Number(a.hwnd) - Number(b.hwnd);
+    const existing = enumWindows().filter((wi) => wi.processName === exeName);
+    if (existing.length > 0) {
+      // Prefer a window that wasn't there before launch, then lowest pid for stability.
+      existing.sort((a, b) => {
+        const an = before.has(a.hwnd) ? 1 : 0;
+        const bn = before.has(b.hwnd) ? 1 : 0;
+        return an - bn || a.pid - b.pid || a.hwnd - b.hwnd;
       });
-
-    for (const candidate of candidates) {
-      console.log(`[MonCOM] Reusing existing app window for single-instance flow: ${candidate.processName} (${candidate.hwnd})`);
-      const moved = await moveWindowByHWND(candidate.hwnd, x, y, w, h);
+      const reuse = existing[0];
+      console.log(`[MonCOM] Single-instance reuse: ${reuse.processName} hwnd=${reuse.hwnd}`);
+      const moved = moveWindowToVisibleRect(reuse.hwnd, x, y, w, h, { foreground: true });
       if (moved) {
-        if (!hwndsBefore.has(candidate.hwnd)) {
-          launchedAppHWNDs.add(candidate.hwnd);
-        } else {
-          console.log(`[MonCOM] Reused pre-existing HWND ${candidate.hwnd}; leaving it unmanaged for close-all.`);
-        }
-        return { success: true };
+        // Only track (for close) windows that genuinely appeared from this launch.
+        return before.has(reuse.hwnd)
+          ? { success: true }
+          : { success: true, hwnd: reuse.hwnd, pid: reuse.pid };
       }
     }
   }
 
-  // Fallback: title match using label or exe name
-  const hints: string[] = [];
-  if (label) hints.push(label);
-  if (exeName) hints.push(exeName);
-
+  // Fallback: title/label substring match across current windows.
+  const hints = [label, exeName].filter((s): s is string => !!s);
   for (const hint of hints) {
-    console.log(`[MonCOM] App fallback: title match "${hint}"`);
-    const result = await moveWindowByTitle(hint, x, y, w, h);
-    if (result) {
+    const moved = await moveWindowByTitle(hint, x, y, w, h);
+    if (moved) {
       console.log(`[MonCOM] App title match succeeded for "${hint}"`);
       return { success: true };
     }
   }
+
   console.log('[MonCOM] App positioning failed');
   return {
     success: false,
     error: `Application launched but MonCOM could not find/position its window: ${target}`,
   };
+}
+
+/** Move the first window whose title or process name contains `hint` (case-insensitive). */
+async function moveWindowByTitle(hint: string, x: number, y: number, w: number, h: number): Promise<boolean> {
+  const needle = hint.toLowerCase();
+  const match = enumWindows().find(
+    (wi) => wi.title.toLowerCase().includes(needle) || wi.processName.includes(needle),
+  );
+  if (!match) return false;
+  return moveWindowToVisibleRect(match.hwnd, x, y, w, h, { foreground: true });
 }
 
 // ─── Main orchestration ───
@@ -389,11 +272,7 @@ async function launchAppZone(
  */
 async function launchZoneContent(zone: Zone, monitors: any[]): Promise<LaunchZoneResult> {
   if (!zone.content) {
-    return {
-      success: false,
-      zoneId: zone.id,
-      error: 'Zone has no content assigned',
-    };
+    return { success: false, zoneId: zone.id, error: 'Zone has no content assigned' };
   }
   const content = zone.content;
 
@@ -405,7 +284,7 @@ async function launchZoneContent(zone: Zone, monitors: any[]): Promise<LaunchZon
       zoneId: zone.id,
       contentType: content.type,
       target: content.target,
-      error: `Monitor not found for zone: ${zone.monitorId}`,
+      error: `Zone's monitor isn't connected (saved as ${zone.monitorId}). Re-assign it in the Layout Editor.`,
     };
   }
 
@@ -429,16 +308,17 @@ async function launchZoneContent(zone: Zone, monitors: any[]): Promise<LaunchZon
         error: appLaunch.error ?? 'Application launch failed',
       };
     }
+    if (appLaunch.hwnd) launchedAppWindows.set(appLaunch.hwnd, appLaunch.pid ?? 0);
   }
 
   // Play automation actions if configured
   if (content.actions && content.actions.length > 0) {
     // Wait for content to load, then add any configured extra buffer
-    await new Promise(r => setTimeout(r, 1500));
+    await sleep(1500);
     const extraDelay = content.launchDelay ?? 0;
     if (extraDelay > 0) {
       console.log(`[MonCOM] Waiting extra ${extraDelay}ms buffer for content to settle`);
-      await new Promise(r => setTimeout(r, extraDelay));
+      await sleep(extraDelay);
     }
     console.log(`[MonCOM] Playing ${content.actions.length} automation actions`);
     const playbackOk = await playActions(content.actions, zone, monitors);
@@ -453,62 +333,38 @@ async function launchZoneContent(zone: Zone, monitors: any[]): Promise<LaunchZon
     }
   }
 
-  return {
-    success: true,
-    zoneId: zone.id,
-    contentType: content.type,
-    target: content.target,
-  };
+  return { success: true, zoneId: zone.id, contentType: content.type, target: content.target };
+}
+
+/** Force-kill a process tree (rare fallback when a window won't close gracefully). */
+function forceKill(pid: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (!pid) return resolve();
+    const child = spawn('taskkill', ['/PID', String(pid), '/F', '/T'], { stdio: 'ignore', windowsHide: true });
+    child.on('close', () => resolve());
+    child.on('error', () => resolve());
+  });
 }
 
 /**
- * Close a launched app window: send WM_CLOSE gracefully, then force-kill if it won't close.
+ * Close a launched app window: post WM_CLOSE, wait briefly, then force-kill if needed.
  */
-async function closeAppWindow(hwnd: string): Promise<AppCloseResult> {
-  // 1) Send WM_CLOSE gracefully
-  try {
-    const result = await runPS(`
-$sig = '[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);'
-$sig2 = '[DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);'
-$sig3 = '[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);'
-$t = Add-Type -MemberDefinition ($sig + $sig2 + $sig3) -Name WinClose -Namespace MonCOM -PassThru -ErrorAction SilentlyContinue
-if (-not $t) { $t = [MonCOM.WinClose] }
-$h = [IntPtr]::new(${hwnd})
-if ($t::IsWindow($h)) {
-  $t::PostMessage($h, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
-  Start-Sleep -Milliseconds 1000
-  if ($t::IsWindow($h)) {
-    $pid = [uint32]0
-    $t::GetWindowThreadProcessId($h, [ref]$pid) | Out-Null
-    if ($pid -ne 0) { taskkill /PID $pid /F /T 2>$null }
-    Write-Output "KILLED:$pid"
-  } else { Write-Output "CLOSED" }
-} else { Write-Output "GONE" }
-`, 10000);
-
-    if (result.startsWith('CLOSED')) {
-      return { hwnd, status: 'closed' };
-    }
-    if (result.startsWith('KILLED:')) {
-      return { hwnd, status: 'killed' };
-    }
-    if (result.startsWith('GONE')) {
-      return { hwnd, status: 'gone' };
-    }
-
-    return {
-      hwnd,
-      status: 'failed',
-      reason: `Unexpected close result: ${result}`,
-    };
-  } catch (e) {
-    console.error(`[MonCOM] closeAppWindow(${hwnd}) failed:`, e);
-    return {
-      hwnd,
-      status: 'failed',
-      reason: e instanceof Error ? e.message : String(e),
-    };
+async function closeAppWindow(hwnd: number, pid: number): Promise<AppCloseResult> {
+  if (!isWindow(hwnd)) return { hwnd, status: 'gone' };
+  postClose(hwnd);
+  // Wait up to ~1.2s for a graceful close.
+  for (let i = 0; i < 6; i++) {
+    await sleep(200);
+    if (!isWindow(hwnd)) return { hwnd, status: 'closed' };
   }
+  // Still open — force kill the process tree.
+  if (pid) {
+    await forceKill(pid);
+    await sleep(250);
+    if (!isWindow(hwnd)) return { hwnd, status: 'killed' };
+    return { hwnd, status: 'failed', reason: 'window survived taskkill' };
+  }
+  return { hwnd, status: 'failed', reason: 'no pid available to force-kill' };
 }
 
 /**
@@ -517,7 +373,7 @@ if ($t::IsWindow($h)) {
 async function closeAllZones(): Promise<CloseAllZonesReport> {
   const report: CloseAllZonesReport = {
     electronWindowsClosed: 0,
-    appWindowsAttempted: launchedAppHWNDs.size,
+    appWindowsAttempted: launchedAppWindows.size,
     appWindowsClosedGracefully: 0,
     appWindowsForceKilled: 0,
     appWindowsAlreadyGone: 0,
@@ -534,41 +390,28 @@ async function closeAllZones(): Promise<CloseAllZonesReport> {
   launchedWindows.length = 0;
 
   // Close tracked app windows (graceful then force)
-  const closePromises = [...launchedAppHWNDs].map(hwnd => closeAppWindow(hwnd));
-  const closeResults = await Promise.all(closePromises);
+  const entries = [...launchedAppWindows.entries()];
+  const closeResults = await Promise.all(entries.map(([hwnd, pid]) => closeAppWindow(hwnd, pid)));
   for (const result of closeResults) {
     if (result.status === 'closed') report.appWindowsClosedGracefully += 1;
     else if (result.status === 'killed') report.appWindowsForceKilled += 1;
     else if (result.status === 'gone') report.appWindowsAlreadyGone += 1;
-    else {
-      report.appWindowsFailed.push({
-        hwnd: result.hwnd,
-        reason: result.reason ?? 'Unknown close failure',
-      });
-    }
+    else report.appWindowsFailed.push({ hwnd: String(result.hwnd), reason: result.reason ?? 'Unknown close failure' });
   }
-  launchedAppHWNDs.clear();
+  launchedAppWindows.clear();
   return report;
 }
 
 /**
- * Get list of open windows with titles.
+ * Get list of open windows with titles (used by the FIND_WINDOWS IPC).
  */
-async function findWindows(): Promise<{ title: string; pid: number }[]> {
-  const ps = `Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | Select-Object Id, MainWindowTitle | ConvertTo-Json`;
-  try {
-    const { stdout } = await execAsync(`powershell -NoProfile -Command "${ps}"`, { timeout: 5000 });
-    const data = JSON.parse(stdout);
-    const arr = Array.isArray(data) ? data : [data];
-    return arr.map((p: any) => ({ title: p.MainWindowTitle, pid: p.Id }));
-  } catch {
-    return [];
-  }
+function findWindows(): { title: string; pid: number }[] {
+  return enumWindows().map((wi) => ({ title: wi.title, pid: wi.pid }));
 }
 
 function hasLaunchedWindows(): boolean {
   const hasElectronWindows = launchedWindows.some(w => !w.isDestroyed());
-  return hasElectronWindows || launchedAppHWNDs.size > 0;
+  return hasElectronWindows || launchedAppWindows.size > 0;
 }
 
 export function registerWindowHandlers(ipcMain: IpcMain) {
@@ -635,14 +478,7 @@ export async function applyPresetFromMain(preset: any, screenModule: Electron.Sc
     closeReport = await closeAllZones();
   }
 
-  const displays = screenModule.getAllDisplays();
-  const monitors = displays.map((d, i) => ({
-    id: monitorIdFromBounds(d.bounds),
-    x: d.bounds.x,
-    y: d.bounds.y,
-    width: d.bounds.width,
-    height: d.bounds.height,
-  }));
+  const monitors = getStableMonitors(screenModule);
 
   // Rematch any zones whose monitorId is stale (e.g., post-reboot when display
   // IDs shift, or after the user reorganized their monitors). Persists changes

@@ -2,7 +2,8 @@ import { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, nativeImage, di
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { registerWindowHandlers, applyPresetFromMain } from './window-manager';
-import { registerPresetHandlers, loadSettings, loadPresets, monitorIdFromBounds } from './preset-store';
+import { registerPresetHandlers, loadSettings, loadPresets } from './preset-store';
+import { getStableMonitors } from './monitors';
 import { startRecording, stopRecording, playActions } from './automation-manager';
 import type { MonitorInfo } from '../shared/types';
 import { IPC } from '../shared/types';
@@ -138,19 +139,7 @@ function createTray() {
 }
 
 function getMonitors(): MonitorInfo[] {
-  const displays = screen.getAllDisplays();
-  const primary = screen.getPrimaryDisplay();
-
-  return displays.map((d, i) => ({
-    id: monitorIdFromBounds(d.bounds),
-    name: `Monitor ${i + 1}${d.id === primary.id ? ' (Primary)' : ''}`,
-    x: d.bounds.x,
-    y: d.bounds.y,
-    width: d.bounds.width,
-    height: d.bounds.height,
-    scaleFactor: d.scaleFactor,
-    isPrimary: d.id === primary.id,
-  }));
+  return getStableMonitors(screen);
 }
 
 app.whenReady().then(() => {

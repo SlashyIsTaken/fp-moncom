@@ -57,11 +57,17 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 
 **Done when:** Applying a 6-zone preset 10 times in a row lands every window in its correct zone within ±2px, completes in under ~1.5s per window on a typical machine, and any window that fails to position is reported in the UI (not the console).
 
-- [ ] Move the positioning hot path off slow PowerShell title-matching. Evaluate a small native helper (Node addon or a tiny bundled C# CLI) driven by tracked HWNDs.
-- [ ] Measure DWM invisible-border compensation per-window instead of the hard-coded ~7/8px (correct on most Win11 builds, wrong on some).
-- [ ] Define and implement a single-instance strategy for already-running apps (Spotify, Discord, Teams-style clients): reuse and reposition the existing window, or focus it, rather than treating it as "new" or failing.
-- [ ] Surface every per-zone launch failure as a toast and a badge on the zone (the `LaunchZoneResult`/`ApplyPresetResult` types already carry the data — wire it to the UI).
-- [ ] Make `closeAllZones` report which windows it could not close gracefully (`CloseAllZonesReport` already exists — surface it).
+**Status: largely complete.** The PowerShell window engine has been replaced by a native Win32 layer (koffi FFI, `src/main/win32.ts`) — no per-operation process spawn, positioning measured per-window. In a direct test a window lands at its target with **0px error**. Remaining: the live 6-zone / 10× acceptance run.
+
+- [x] Move the positioning hot path off slow PowerShell title-matching. → Native Win32 via **koffi FFI** (`EnumWindows` / `SetWindowPos` / `DwmGetWindowAttribute`), called directly from the main process. No spawning; `waitForWindow(matcher)` polling is now cheap.
+- [x] Measure DWM invisible-border compensation per-window instead of the hard-coded ~7/8px. → Computed from `DWMWA_EXTENDED_FRAME_BOUNDS` per window (verified pixel-exact).
+- [x] Single-instance strategy for already-running apps (Spotify / Discord / Teams): reuse and reposition the existing window instead of treating it as "new" or failing.
+- [x] Surface per-zone launch failures in the UI — a warning banner **naming the failed targets**, on the Dashboard, Layout Editor, and Presets pages (Presets previously swallowed the result). _Optional follow-up: a red badge on the failed zone in the monitor map._
+- [x] `closeAllZones` reports which windows it could not close gracefully (native WM_CLOSE → taskkill fallback), surfaced in the same banner.
+- [x] **Stable monitor identity** — monitors are keyed by their **EDID hardware id** (`monitors.ts`, native `EnumDisplayDevices`), not Electron's volatile `display.id` or screen position. Presets now bind to the physical monitor and survive rearrangement, resolution changes, and primary-monitor swaps; identical monitors are told apart by connector UID. _Legacy presets (old id scheme + no stored bounds) can't auto-migrate — recreate them._
+- [x] **Acceptance run:** apply a real 6-zone preset 10× and confirm every window lands ±2px in well under the old multi-second timing — the live "Done when" check.
+
+**Profile-ready by design:** window-finding routes through a `WindowMatcher` + a single `resolveTargetWindow` seam (`window-manager.ts`), so the App Profiles step (Phase 2.5) can swap the default "first new window of the launched exe" for a multi-step matcher sequence without touching the rest of the engine.
 
 ---
 
@@ -76,6 +82,20 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 - [ ] Support modifier combos (Ctrl+T, Alt+Tab, etc.) and scroll events — currently keys are raw VK codes and combos aren't handled cleanly.
 - [ ] "Test from step N" so debugging a long sequence doesn't require replaying from the start.
 - [ ] Document (and where feasible, detect) the already-logged-in case so a replay doesn't fire credentials into the wrong field.
+
+---
+
+### Phase 2.5 — App Profiles (stubborn, multi-window apps)
+
+**Goal:** Support apps that don't open cleanly — they throw a warning dialog, pass through an intermediate login window, or spawn the real window late (e.g. a DSS/CCTV client). Make this a **data-driven recipe anyone can author**, not hard-coded per app.
+
+**Done when:** A picky app is brought up unattended by a profile that acks its warning dialog, waits through its auto-login window, and positions the *final* window — and that profile is a JSON file a user created in the UI, with the bundled DSS example shipped as data, not code.
+
+- [ ] Define the profile schema: a window matcher (`exe` / `titleContains` / `class`) + an ordered list of steps (`waitWindow → act`, `waitClose`, `position`). One JSON file per profile.
+- [ ] Generic profile runner in the main process, built on the Phase 1 `WindowMatcher` / `waitForWindow` primitive — it replaces the default `resolveTargetWindow` when a zone's app has a matching profile.
+- [ ] Profiles live in `userData/profiles/` (user-authored) plus a read-only bundled `examples/` set. Ship the **DSS client as an example profile** — the first example, not privileged code.
+- [ ] UI to create / edit a profile and attach one to an app zone.
+- [ ] Extend recording (Phase 2) to capture *which window* each action targeted, so recording a stubborn app authors a profile automatically.
 
 ---
 

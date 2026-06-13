@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Monitor, Play, Square, Zap, LayoutGrid, Bookmark, ArrowRight } from 'lucide-react';
 import type { MonitorInfo, Preset } from '../../shared/types';
+import { formatApplyResult } from '../applyResultMessage';
 import type { Page } from '../App';
 
 interface DashboardPageProps {
@@ -26,21 +27,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     setActivePreset(preset.id);
     try {
       const result = await window.moncom?.applyPreset(preset);
-      if (result) {
-        const closeFailureCount = result.closeReport?.appWindowsFailed.length ?? 0;
-        if (result.failedZones.length > 0 || closeFailureCount > 0) {
-          const parts: string[] = [];
-          if (result.failedZones.length > 0) {
-            parts.push(`${result.failedZones.length} zone(s) failed to launch`);
-          }
-          if (closeFailureCount > 0) {
-            parts.push(`${closeFailureCount} window(s) could not be closed`);
-          }
-          setStatusMessage(parts.join('. ') + '.');
-        } else {
-          setStatusMessage(null);
-        }
-      }
+      setStatusMessage(formatApplyResult(result));
       setHasLaunched(await window.moncom?.hasLaunchedWindows() ?? false);
     } catch (e) {
       console.error('Failed to apply preset:', e);

@@ -10,3 +10,6 @@ tools/capture/video/
 tools/capture/frames/
 tools/capture/*.png
 tools/capture/*.webm
+
+# tools build artifacts
+tools/_*
