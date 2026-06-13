@@ -1,122 +1,170 @@
 # MonCOM Roadmap
 
-This document tracks where MonCOM is today and what's left before it can call itself **v1.0.0**.
+MonCOM is a **command center for Windows**: you describe a wall of apps and dashboards once, and MonCOM launches every one of them into an exact position on your monitors — logged in, navigated, and ready — in a single click or automatically on boot.
 
-It is meant to give a realistic, public-facing picture of the project — where the rough edges are, what's deliberately out of scope, and where new contributors can usefully jump in. It is **not** a promise about timelines.
-
----
-
-## Where we are: v0.1.0
-
-The core loop works. You can detect monitors, split them into zones using one of six templates, assign URLs or applications to those zones, save the layout as a preset, and apply it again later in one click. The app lives in the system tray, can launch on Windows boot, and can apply a chosen preset automatically when it starts.
-
-The more ambitious pieces are also in place: per-zone action recording and playback (mouse clicks, key presses, typed text), the elevation-aware app launching path, and the monitor identification overlay.
-
-What that means in practice: the app is **usable end-to-end for the primary use case**, but it has not yet been hardened for distribution. There are no tests, no signed builds, no release pipeline, and a number of UX rough edges that are easy to forgive in a personal tool but obvious to anyone trying it for the first time.
-
-The version banner in the top of the app reflects this — it shows the alpha warning until the major version hits 1.
+This document tracks where MonCOM is today and what's left before it can call itself **v1.0.0**. It is meant to give a realistic, public-facing picture of the project. It is **not** a promise about timelines.
 
 ---
 
-## The road to v1.0.0
+## What MonCOM is — and is not
 
-Roughly in priority order. The stretch items at the bottom are nice-to-haves that may or may not make the cut.
+This is the decision that shapes everything below, so it is stated up front.
 
-### 1. Reliability of the core launch flow
+**MonCOM is an opinionated tool for one job:** bringing up a repeatable, multi-window workspace — an ops/monitoring wall, a dashboard kiosk, a fixed streaming or trading layout — and keeping it predictable across reboots. The headline capability is **per-window automation**: a window doesn't just open in the right place, it can log itself in, dismiss a startup dialog, and navigate to the right view, unattended.
 
-Before anything new gets added, the existing launch path needs to be more predictable.
+**MonCOM is not a general window-snapping utility.** It does not try to replace PowerToys FancyZones, DisplayFusion, or AquaSnap for everyday drag-a-window-into-a-zone use. Those tools own that space, they are free or mature, and competing with them on live-snapping UX is a fight with no payoff. MonCOM has just enough layout editing to define a wall, and no more.
 
-- [ ] App-window positioning currently uses PowerShell + inline C# Win32 calls. It works, but it is slow (sometimes several seconds) and depends on title matching when HWND tracking misses. We should evaluate moving the hot path to a small native helper (Node addon, or a tiny C# CLI shipped alongside) so launches feel instant.
-- [ ] Compensation for the invisible DWM window borders is currently a hard-coded 8px. This is correct on most Win11 builds but not all — needs to be measured per-window or made configurable.
-- [ ] When a launched application is already running (a single-instance app like Spotify, Discord, etc.), MonCOM treats the existing window as "new" or fails to find one. We need a predictable strategy for these cases.
-- [ ] Errors during launch currently land in the console. They should surface in the UI (toast, status badge on the zone) so the user knows when a zone failed to position.
-- [ ] `closeAllZones` should report which apps it could not close gracefully.
+If you want to snap your code editor next to a browser as you work, use FancyZones. If you want six screens of dashboards to come up the same way every morning without you touching a thing, that is MonCOM.
 
-### 2. Distribution & releases
+### Deliberately out of scope (to keep the identity sharp)
+- Live, FancyZones-style window snapping, keyboard-drag, and per-app window rules.
+- Linux/macOS builds. The launch path is intentionally deep in Win32; the value proposition is Windows command centers.
+- Cloud sync, accounts, or telemetry. Everything stays on the user's machine.
+- A general scripting/plugin runtime (revisit only if real demand appears post-1.0).
 
-The whole point of v1.0.0 is that someone can download an installer and use it without cloning the repo.
+---
 
-- [ ] Set up a GitHub Actions workflow that builds the NSIS installer and the portable `.exe` on every tag.
-- [ ] Generate a proper Windows icon set (`.ico` with 16/24/32/48/64/128/256 px) — currently only a single PNG ships in `build/`.
-- [ ] Code-sign the installer. Either a real certificate or, at minimum, a documented self-signed build so SmartScreen warnings have an explanation.
-- [ ] Add an auto-updater (likely `electron-updater`) so users do not have to re-download the installer for every patch.
-- [ ] Write a `CHANGELOG.md` and start enforcing semver from the first tagged release.
+## Where we are: v0.1.1
 
-### 3. Global hotkeys
+The core loop works end-to-end. You can detect monitors, split them into zones with one of six templates, assign URLs or applications to zones, save the layout as a preset, and apply it again in one click. The app lives in the system tray, can launch on Windows boot, and can auto-apply a chosen preset on startup. The ambitious pieces exist too: per-zone record/replay automation, elevation-aware launching, per-URL zoom, and the monitor-identify overlay.
 
-The settings type already declares `hotkeys: Record<string, string>` but nothing is wired up. This is one of the highest-value missing features — being able to apply a preset from anywhere in Windows without touching the MonCOM window.
+What that means: MonCOM is **usable end-to-end for its core job**, but it has not been hardened for distribution. No tests, no signed builds, no release pipeline, and the launch path — the one thing the whole product rests on — is still slower and less predictable than it needs to be. The pre-release banner stays until the major version hits 1.
 
-- [ ] Wire up `globalShortcut` registration in the main process.
-- [ ] UI in the settings page (or a new section in the preset editor) to bind a hotkey to a specific preset.
-- [ ] Detect and surface conflicts with existing shortcuts.
-- [ ] Persist the bindings in `settings.json` and re-register them on startup.
+---
 
-### 4. Layout editor improvements
+## How to read this roadmap
 
-The six built-in templates cover most cases but do not feel like enough for v1.0.0.
+Phases are ordered by dependency, not by appetite — each builds on the last. Every phase leads with a **Goal** (one sentence) and a **Done when** (a single measurable test). If the "Done when" can't be demonstrated, the phase isn't finished, regardless of how many checkboxes are ticked.
 
-- [ ] Drag handles on zone edges so users can fine-tune a template after applying it.
-- [ ] A "custom split" mode where the user draws zones directly on the monitor preview.
-- [ ] Save user-made layouts as named templates that show up alongside the built-ins.
-- [ ] Show the actual preview content (a screenshot, favicon for URLs, exe icon for apps) inside the zone preview rather than just the label.
+---
 
-### 5. Preset management
+### Phase 0 — Name the product
 
-Right now presets live only in the user's `%APPDATA%`. That's fine for one machine but limits sharing and recovery.
+**Goal:** Make the command-center identity legible in 10 seconds to a stranger, and reframe automation from "niche bolt-on" to "the reason this exists."
 
-- [ ] Export a preset to a `.json` file from the Presets page.
-- [ ] Import a preset from a file (with a preview of monitor mapping before committing).
-- [ ] Duplicate / rename actions on the preset card.
-- [ ] Handle the "monitor IDs changed" case gracefully — if a saved preset references a monitor that no longer exists, offer to remap it instead of silently dropping zones.
+**Done when:** The README opens with a command-center hero and a looping GIF of a real wall coming up on boot; a stranger reading it can state what MonCOM is for and why they'd pick it over FancyZones without scrolling past the fold.
 
-### 6. Automation editor
+- [ ] Rewrite the README hero around the wall-on-boot story; lead with the automation demo, not the feature table.
+- [ ] Add a short "Why not just FancyZones?" section that draws the line above honestly.
+- [ ] Record one GIF/screen capture: empty desktop → one click/boot → full positioned, logged-in wall.
+- [ ] Update the in-app tagline/empty states to match (currently generic "organize your monitors").
 
-The recording and playback foundation is solid, but editing a recorded sequence is currently limited to deleting individual actions and adding a "type" action.
+---
+
+### Phase 1 — The wall comes up right, every time
+
+**Goal:** Make launching a preset fast and predictable. This is the product's foundation — everything else is decoration if the wall lands wrong.
+
+**Done when:** Applying a 6-zone preset 10 times in a row lands every window in its correct zone within ±2px, completes in under ~1.5s per window on a typical machine, and any window that fails to position is reported in the UI (not the console).
+
+- [ ] Move the positioning hot path off slow PowerShell title-matching. Evaluate a small native helper (Node addon or a tiny bundled C# CLI) driven by tracked HWNDs.
+- [ ] Measure DWM invisible-border compensation per-window instead of the hard-coded ~7/8px (correct on most Win11 builds, wrong on some).
+- [ ] Define and implement a single-instance strategy for already-running apps (Spotify, Discord, Teams-style clients): reuse and reposition the existing window, or focus it, rather than treating it as "new" or failing.
+- [ ] Surface every per-zone launch failure as a toast and a badge on the zone (the `LaunchZoneResult`/`ApplyPresetResult` types already carry the data — wire it to the UI).
+- [ ] Make `closeAllZones` report which windows it could not close gracefully (`CloseAllZonesReport` already exists — surface it).
+
+---
+
+### Phase 2 — Automation that survives the real world
+
+**Goal:** Make record/replay robust and trustworthy enough to be the headline feature. An ops wall that logs itself in unattended is the whole pitch.
+
+**Done when:** You can record an auto-login to a real web dashboard, reboot the machine, and have the wall come up fully logged-in and navigated with zero interaction, reproducibly across 5 consecutive boots.
 
 - [ ] Inline editing of recorded delays and click coordinates.
 - [ ] Reorder actions by drag.
-- [ ] Add support for scroll events and modifier keys (currently keys are recorded as raw VK codes, but combos like Ctrl+T are not handled cleanly).
-- [ ] A "test from action N" button so debugging a long sequence does not require replaying it from the start.
-
-### 7. Tests & quality gates
-
-There are currently no tests at all. v1.0.0 needs at least a thin safety net.
-
-- [ ] Unit tests for the pure logic in `preset-store.ts`, the zone-bounds math, and the playback script generation.
-- [ ] An integration test that boots Electron headlessly and verifies the IPC contract in `preload.ts` matches what the renderer expects.
-- [ ] Lint + typecheck in CI on every PR.
-
-### 8. Documentation & onboarding
-
-- [ ] Add screenshots of the dashboard, layout editor, and a recorded automation to the README.
-- [ ] A short `CONTRIBUTING.md` covering the dev loop (`npm run dev`), the main/renderer split, and how to add a new IPC channel.
-- [ ] A `SECURITY.md` so people know where to report issues responsibly.
-- [ ] Issue and PR templates under `.github/`.
+- [ ] Support modifier combos (Ctrl+T, Alt+Tab, etc.) and scroll events — currently keys are raw VK codes and combos aren't handled cleanly.
+- [ ] "Test from step N" so debugging a long sequence doesn't require replaying from the start.
+- [ ] Document (and where feasible, detect) the already-logged-in case so a replay doesn't fire credentials into the wrong field.
 
 ---
 
-## Stretch goals (probably post-1.0)
+### Phase 3 — Trust to download
 
-Things that would be great to have but are not blockers for tagging v1.0.0:
+**Goal:** Let a stranger go from "found the repo" to "running my wall" without ever opening a terminal. This is what turns a personal tool into something people actually download.
 
-- A "scenes" concept that switches presets based on a trigger (time of day, plugged-in monitor count, focused app).
-- CLI flags to apply a preset from the command line, so it can be wired into other automation tools.
-- Linux and macOS builds. The architecture currently leans hard on Windows-specific Win32 calls, so this would mean a real abstraction layer.
-- A plugin / scripting hook for users who want to extend zone behavior beyond URL and app launching.
-- Cloud-optional preset sync (opt-in, no telemetry).
+**Done when:** A tagged release produces a signed (or clearly-explained) installer and portable build; a non-developer downloads it, runs it, and builds a working wall without cloning or building anything.
+
+- [ ] GitHub Actions workflow that builds the NSIS installer and portable `.exe` on every tag.
+- [ ] Proper Windows icon set (`.ico` with 16/24/32/48/64/128/256px) — only a single PNG ships today.
+- [ ] Code-sign the installer, or at minimum ship documented SmartScreen guidance plus published checksums so the warning has an explanation.
+- [ ] Auto-updater (`electron-updater`) so patches don't require a manual re-download.
+- [ ] `CHANGELOG.md` and enforced semver from the first tagged release.
+
+---
+
+### Phase 4 — Control the wall from anywhere
+
+**Goal:** Apply and switch presets without touching the MonCOM window — the difference between a toy and an operator's tool.
+
+**Done when:** A bound global hotkey applies its preset from inside any other app, conflicts with existing shortcuts are detected and surfaced, and `moncom.exe --apply "<preset>"` brings a wall up from the command line.
+
+- [ ] Wire `globalShortcut` registration in the main process (the `hotkeys` setting already exists, unused).
+- [ ] UI to bind a hotkey to a specific preset; persist in `settings.json` and re-register on startup.
+- [ ] Detect and surface conflicts with already-registered shortcuts.
+- [ ] CLI flag to apply a preset by name, so MonCOM can be wired into other automation/schedulers.
+
+---
+
+### Phase 5 — Just enough editing to not look broken
+
+**Goal:** Add the minimum layout-editing polish so the editor doesn't look half-baked next to rivals — then stop. Explicitly capped.
+
+**Done when:** A user can drag a zone edge to fine-tune a template, draw a one-off custom split, and save the result as a named template that appears beside the built-ins. No further editing investment until post-1.0.
+
+- [ ] Drag handles on zone edges to fine-tune a template after applying it.
+- [ ] One "custom split" mode where the user draws zones on the monitor preview.
+- [ ] Save user-made layouts as named templates alongside the six built-ins.
+- [ ] Show real preview content in the zone (favicon for URLs, exe icon for apps) instead of just the label.
+- [ ] **Stop line:** no live snapping, no keyboard-drag, no window rules. That's FancyZones' job.
+
+---
+
+### Phase 6 — A thin safety net
+
+**Goal:** Cover the logic that, if it breaks, breaks the wall silently — without pretending to need full test coverage.
+
+**Done when:** CI runs lint, typecheck, and unit tests green on every PR, with the zone-bounds math, preset/monitor rematch (`rematchMonitor`/`migratePresets`), and playback-script generation under test.
+
+- [ ] Unit tests for zone-bounds math, the monitor-rematch/migration logic in `preset-store.ts`, and playback script generation.
+- [ ] Lint + typecheck in CI on every PR.
+- [ ] (Stretch) A headless Electron smoke test asserting the `preload.ts` IPC contract matches what the renderer calls.
+
+---
+
+### Phase 7 — Share and recover a wall
+
+**Goal:** Let a preset move between machines and survive a monitor reshuffle — important when the same wall is deployed on more than one command-center PC.
+
+**Done when:** You can export a preset on machine A, import it on machine B with a different monitor arrangement, and the import previews a sane monitor remap before committing.
+
+- [ ] Export a preset to a `.json` file from the Presets page.
+- [ ] Import a preset from a file, with a monitor-mapping preview before committing.
+- [ ] Duplicate / rename actions on the preset card.
+- [ ] Graceful "monitor IDs changed" handling at apply time — offer a remap instead of silently dropping zones (the `monitorBounds` rematch groundwork already exists).
+
+---
+
+## Post-1.0 — only if the niche pulls for it
+
+Not blockers, and not to be started before v1.0.0 ships. Listed so contributors know they're on the radar but parked:
+
+- **Scenes:** switch presets automatically on a trigger (time of day, monitor count, focused app).
+- **Conditional automation:** branch a replay on what's on screen (skip login if already authenticated).
+- **Preset templates gallery:** shareable community walls for common ops stacks.
 
 ---
 
 ## Where to help
 
-If you are reading this and want to contribute, the easiest places to start are:
+The highest-impact, least-glamorous places for a new contributor:
 
-- **Anything in section 1 or 7** — these are the unsexy but high-impact areas that need eyes from people who didn't write the original code.
-- **Section 8 documentation** — particularly the screenshots, since the author of this repo keeps forgetting to take them.
-- **Filing issues** with reproducible steps when something does not position correctly. Window positioning is the kind of feature where edge cases (ultrawide monitors, fractional scaling, unusual DPI combos) are best found by other people's setups.
+- **Phase 1** — window positioning edge cases (ultrawide, fractional scaling, unusual DPI combos) are best found on other people's hardware. File issues with reproducible steps.
+- **Phase 6** — the launch and migration math needs eyes from people who didn't write it.
+- **Phase 0 / 3** — screenshots, the demo GIF, and installer testing on clean machines.
 
-Open an issue first if you are planning anything more involved than a small fix — the scope of the project is intentionally narrow and it is worth a quick alignment before writing a lot of code.
+The scope here is intentionally narrow. Open an issue before anything larger than a small fix so we can check it fits the command-center identity above — features that pull MonCOM back toward "general window manager" will likely be declined, and that's by design.
 
 ---
 
-*This roadmap will be updated as items land or priorities shift. Last meaningful revision: April 2026.*
+*This roadmap will be updated as items land or priorities shift. Last meaningful revision: June 2026 — refocused on the command-center identity.*
