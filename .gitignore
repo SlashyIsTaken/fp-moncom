@@ -3,3 +3,10 @@ dist/
 release/
 *.log
 .env
+
+# Capture scratch — regenerate the README asset via tools/capture (see its README).
+# The finished asset lives in assets/ and IS committed.
+tools/capture/video/
+tools/capture/frames/
+tools/capture/*.png
+tools/capture/*.webm

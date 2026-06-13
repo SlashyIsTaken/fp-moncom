@@ -21,6 +21,10 @@
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
 </p>
 
+<p align="center">
+  <img src="assets/moncom-wall.gif" alt="MonCOM reconfiguring a video wall — one display splitting into two, four, and nine live zones across multiple monitors" width="600" />
+</p>
+
 > **Note:** MonCOM is currently in pre-release (v0.x). Features may be incomplete, unstable, or subject to change. There will be no downloadable release until the project reaches a stable version. Until then, follow the [Building from Source](#building-from-source) instructions to run it.
 
 ---
