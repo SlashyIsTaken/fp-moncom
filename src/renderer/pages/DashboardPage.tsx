@@ -72,7 +72,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           Dashboard
         </h1>
         <p className="text-sm text-text-secondary mt-1.5">
-          Monitor overview and quick actions
+          Your displays and presets — launch a full layout in one click
         </p>
         {statusMessage && (
           <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
@@ -206,7 +206,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <Bookmark className="w-10 h-10 text-text-muted mx-auto mb-3" />
             <h3 className="text-base font-semibold text-text-primary mb-1">No presets yet</h3>
             <p className="text-sm text-text-secondary mb-5">
-              Create a layout in the editor and save it as a preset
+              Build a layout of apps and dashboards, positioned and ready on launch
             </p>
             <button
               onClick={() => onNavigate('editor')}

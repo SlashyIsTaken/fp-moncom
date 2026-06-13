@@ -44,10 +44,10 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 
 **Done when:** The README opens with a command-center hero and a looping GIF of a real wall coming up on boot; a stranger reading it can state what MonCOM is for and why they'd pick it over FancyZones without scrolling past the fold.
 
-- [ ] Rewrite the README hero around the wall-on-boot story; lead with the automation demo, not the feature table.
-- [ ] Add a short "Why not just FancyZones?" section that draws the line above honestly.
-- [ ] Record one GIF/screen capture: empty desktop → one click/boot → full positioned, logged-in wall.
-- [ ] Update the in-app tagline/empty states to match (currently generic "organize your monitors").
+- [x] Rewrite the README hero around the wall-on-boot story; lead with the automation feature, not the feature table.
+- [x] Add a short "Why not just FancyZones?" section that draws the line above honestly.
+- [x] Hero animation: a looping render of the video wall reconfiguring across monitors (`assets/moncom-wall.gif`, regenerable via `tools/capture`). _Optional follow-up: a literal empty-desktop → boot → live-wall screen capture._
+- [x] Update the in-app tagline/empty states to match (was generic "organize your monitors").
 
 ---
 

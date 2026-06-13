@@ -1,10 +1,17 @@
 <h1 align="center">Flarepoint MonCOM | Monitor Commander</h1>
 
 <p align="center">
-  <strong>Organize your monitors. Command your workspace.</strong>
+  <strong>Your multi-monitor command center for Windows.</strong>
 </p>
 
 <p align="center">
+  Launch a wall of apps and dashboards into exact positions — logged in and ready —<br/>
+  in one click, or automatically the moment Windows boots.
+</p>
+
+<p align="center">
+  <a href="#what-is-moncom">What is MonCOM?</a> •
+  <a href="#why-not-just-fancyzones">Why not FancyZones?</a> •
   <a href="#features">Features</a> •
   <a href="#installation">Installation</a> •
   <a href="#getting-started">Getting Started</a> •
@@ -31,9 +38,29 @@
 
 ## What is MonCOM?
 
-MonCOM (Monitor Commander) is a desktop application for Windows that lets you split your monitors into zones, assign content to each zone, and save those layouts as reusable presets. Whether you have a dual-monitor dev setup or a six-screen command center, MonCOM gives you instant, one-click control over what goes where.
+MonCOM (Monitor Commander) turns a wall of monitors into a single, repeatable command center. You describe your workspace once — which apps and dashboards go where, across every display — save it as a preset, and bring the whole thing up with one click or automatically when Windows boots.
 
-Assign URLs or applications to specific regions of any connected display, then apply your entire layout in one click. Combine it with auto-launch on startup to have your workspace fully configured the moment your PC boots.
+It doesn't just open windows in the right place. Each zone can **log itself in, dismiss a startup dialog, and navigate to the right view** by replaying a sequence you record once. So a six-screen ops wall, a monitoring kiosk, or a fixed trading layout comes up fully positioned *and* fully signed in — unattended.
+
+It's built for the set-it-up-once, run-it-daily crowd: NOC and ops walls, dashboard kiosks, streaming rigs, and anyone whose "workspace" is more than a couple of windows.
+
+---
+
+## Why not just FancyZones?
+
+If you want to drag a window into a zone *while you work*, use [PowerToys FancyZones](https://learn.microsoft.com/windows/powertoys/fancyzones) — it's free, excellent, and MonCOM doesn't try to replace it.
+
+MonCOM solves a different problem. FancyZones helps you place a window **you've already opened**. MonCOM **opens the windows for you** — the right apps and URLs, on the right monitors, in the right zones — then drives them past the login screen, on demand or on boot. One is a snapping tool. The other brings up an entire workspace, repeatably, with no clicks.
+
+| | FancyZones / DisplayFusion | MonCOM |
+|---|:---:|:---:|
+| Snap a window you opened into a zone | ✅ | — |
+| Launch the apps & dashboards themselves | — | ✅ |
+| Position them across multiple monitors in one action | partial | ✅ |
+| Auto-login / click-through, per window | — | ✅ |
+| Bring the whole setup up on boot | — | ✅ |
+
+If your workspace is "snap my editor next to my browser," that's FancyZones. If it's "bring up my whole wall, logged in, every morning," that's MonCOM.
 
 ---
 
@@ -58,8 +85,8 @@ Each zone can be assigned either:
 - **A URL** — opens in a frameless, positioned browser window
 - **An application** — launches the executable and moves it into position
 
-### Action Recording & Playback
-After assigning content to a zone, you can record a click and keyboard sequence that MonCOM will replay automatically every time that zone launches. This is useful for:
+### Auto-Login & Action Playback — the headline feature
+This is what sets MonCOM apart from a plain window-snapping tool. After assigning content to a zone, you can record a click and keyboard sequence that MonCOM replays automatically every time that zone launches — so the window doesn't just open in position, it arrives logged in and ready. This is useful for:
 - Logging into a web dashboard
 - Clicking through a startup dialog
 - Navigating to a specific tab or view

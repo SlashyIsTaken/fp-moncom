@@ -182,7 +182,7 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
             Layout Editor
           </h1>
           <p className="text-sm text-text-secondary mt-1.5">
-            Split your monitors into zones and assign content
+            Split monitors into zones and assign an app or dashboard to each
           </p>
           {applyStatus && (
             <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">

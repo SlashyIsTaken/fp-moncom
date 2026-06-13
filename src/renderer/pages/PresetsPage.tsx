@@ -38,7 +38,7 @@ export function PresetsPage({ onNavigate, onEditPreset }: PresetsPageProps) {
             Presets
           </h1>
           <p className="text-sm text-text-secondary mt-1.5">
-            Manage your saved monitor layouts
+            Saved layouts — launch or switch your whole setup in one click
           </p>
         </div>
         <button
@@ -126,7 +126,7 @@ export function PresetsPage({ onNavigate, onEditPreset }: PresetsPageProps) {
           <Bookmark className="w-12 h-12 text-text-muted/50 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-text-primary mb-1.5">No presets yet</h3>
           <p className="text-sm text-text-secondary mb-6 max-w-sm mx-auto">
-            Create a layout in the editor, configure your zones, and save it as a preset for quick switching.
+            Build a layout, drop an app or dashboard into each zone, and save it as a preset — then launch your whole setup in one click, or automatically on boot.
           </p>
           <button
             onClick={() => onNavigate('editor')}
