@@ -51,6 +51,21 @@ export interface AutomationAction {
   delay: number;
 }
 
+/**
+ * A DOM-driven login/setup step for a URL zone. Because MonCOM owns the
+ * BrowserWindow, these run via injected JS against CSS selectors — robust to
+ * page layout shifts, unlike coordinate-based input replay.
+ */
+export interface WebLoginStep {
+  action: 'waitFor' | 'fill' | 'click';
+  /** CSS selector the step targets. */
+  selector: string;
+  /** Value to type, for `fill`. */
+  value?: string;
+  /** Optional pause (ms) after this step completes. */
+  delayMs?: number;
+}
+
 /** Content that can be assigned to a zone */
 export interface ZoneContent {
   type: 'url' | 'application';
@@ -64,6 +79,8 @@ export interface ZoneContent {
   launchDelay?: number;
   /** Recorded automation actions to replay after launch */
   actions?: AutomationAction[];
+  /** DOM-driven auto-login steps, for `url` zones (run after the page loads). */
+  webLogin?: WebLoginStep[];
 }
 
 export interface AppWindowCloseFailure {

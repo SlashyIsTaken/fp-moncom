@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, nativeImage, dialog } from 'electron';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { registerWindowHandlers, applyPresetFromMain } from './window-manager';
 import { registerPresetHandlers, loadSettings, loadPresets } from './preset-store';
 import { getStableMonitors } from './monitors';
@@ -143,6 +143,24 @@ function getMonitors(): MonitorInfo[] {
 }
 
 app.whenReady().then(() => {
+  // Self-elevate at startup when "Run as administrator" is enabled, so apps that
+  // require elevation launch directly (inheriting our token) instead of prompting
+  // UAC on every launch. Guarded against a relaunch loop: the elevated instance
+  // passes isProcessElevated() and skips this. In dev we never elevate.
+  if (!isDev) {
+    try {
+      if (loadSettings().runAsAdmin && !isProcessElevated()) {
+        spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+          `Start-Process -FilePath '${process.execPath.replace(/'/g, "''")}' -Verb RunAs`],
+          { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+        app.exit(0);
+        return;
+      }
+    } catch (e) {
+      console.error('[MonCOM] Elevation relaunch failed, continuing unelevated:', e);
+    }
+  }
+
   createWindow();
   createTray();
 

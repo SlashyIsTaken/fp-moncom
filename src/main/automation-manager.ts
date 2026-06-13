@@ -33,6 +33,7 @@ public class InputRecorder {
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_LBUTTONDOWN = 0x0201;
     private const int WM_RBUTTONDOWN = 0x0204;
+    private const int WM_MOUSEWHEEL = 0x020A;
     private const int WM_KEYDOWN = 0x0100;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -86,6 +87,9 @@ public class InputRecorder {
     [DllImport("user32.dll")]
     public static extern bool GetCursorPos(out POINT lpPoint);
 
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vKey);
+
     private static IntPtr mouseHook = IntPtr.Zero;
     private static IntPtr keyHook = IntPtr.Zero;
     private static LowLevelProc mouseDelegate;
@@ -102,25 +106,58 @@ public class InputRecorder {
         Console.Out.Flush();
     }
 
+    // Invariant-culture format so decimals always use '.' regardless of the
+    // machine's locale (e.g. nl-NL would otherwise emit '0,5' and break JSON).
+    private static string F6(double v) {
+        return v.ToString("F6", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static long NextDelay() {
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        long delay = now - lastEventTime;
+        lastEventTime = now;
+        return delay;
+    }
+
     private static IntPtr MouseCallback(int nCode, IntPtr wParam, IntPtr lParam) {
         if (nCode >= 0) {
             int msg = wParam.ToInt32();
             if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN) {
                 var info = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-                int px = info.pt.x;
-                int py = info.pt.y;
-                if (InBounds(px, py)) {
-                    double relX = (double)(px - bX) / bW;
-                    double relY = (double)(py - bY) / bH;
-                    long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    long delay = now - lastEventTime;
-                    lastEventTime = now;
+                if (InBounds(info.pt.x, info.pt.y)) {
+                    double relX = (double)(info.pt.x - bX) / bW;
+                    double relY = (double)(info.pt.y - bY) / bH;
+                    long delay = NextDelay();
                     string clickType = msg == WM_RBUTTONDOWN ? "right-click" : "click";
-                    Emit("{\\"type\\":\\"" + clickType + "\\",\\"x\\":" + relX.ToString("F6") + ",\\"y\\":" + relY.ToString("F6") + ",\\"delay\\":" + delay + "}");
+                    Emit("{\\"type\\":\\"" + clickType + "\\",\\"x\\":" + F6(relX) + ",\\"y\\":" + F6(relY) + ",\\"delay\\":" + delay + "}");
+                }
+            } else if (msg == WM_MOUSEWHEEL) {
+                var info = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                if (InBounds(info.pt.x, info.pt.y)) {
+                    short delta = (short)((info.mouseData >> 16) & 0xFFFF);
+                    int notches = delta / 120;
+                    double relX = (double)(info.pt.x - bX) / bW;
+                    double relY = (double)(info.pt.y - bY) / bH;
+                    long delay = NextDelay();
+                    Emit("{\\"type\\":\\"scroll\\",\\"x\\":" + F6(relX) + ",\\"y\\":" + F6(relY) + ",\\"deltaY\\":" + notches + ",\\"delay\\":" + delay + "}");
                 }
             }
         }
         return CallNextHookEx(mouseHook, nCode, wParam, lParam);
+    }
+
+    private static bool IsModifierVk(uint vk) {
+        // Ctrl/Alt/Shift/Win (generic + left/right variants 0xA0-0xA5).
+        return vk == 0x10 || vk == 0x11 || vk == 0x12 || vk == 0x5B || vk == 0x5C || (vk >= 0xA0 && vk <= 0xA5);
+    }
+
+    private static string ModifiersJson() {
+        var list = new System.Collections.Generic.List<string>();
+        if ((GetAsyncKeyState(0x11) & 0x8000) != 0) list.Add("\\"ctrl\\"");
+        if ((GetAsyncKeyState(0x12) & 0x8000) != 0) list.Add("\\"alt\\"");
+        if ((GetAsyncKeyState(0x10) & 0x8000) != 0) list.Add("\\"shift\\"");
+        if (((GetAsyncKeyState(0x5B) & 0x8000) != 0) || ((GetAsyncKeyState(0x5C) & 0x8000) != 0)) list.Add("\\"win\\"");
+        return String.Join(",", list.ToArray());
     }
 
     private static IntPtr KeyCallback(int nCode, IntPtr wParam, IntPtr lParam) {
@@ -129,10 +166,14 @@ public class InputRecorder {
             GetCursorPos(out cursorPos);
             if (InBounds(cursorPos.x, cursorPos.y)) {
                 var info = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
-                long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                long delay = now - lastEventTime;
-                lastEventTime = now;
-                Emit("{\\"type\\":\\"key\\",\\"vkCode\\":" + info.vkCode + ",\\"delay\\":" + delay + "}");
+                // Don't emit standalone modifier presses — they're captured as the
+                // modifiers of the next real key (e.g. Ctrl+T becomes one key action).
+                if (!IsModifierVk(info.vkCode)) {
+                    long delay = NextDelay();
+                    string mods = ModifiersJson();
+                    string modsField = mods.Length > 0 ? (",\\"modifiers\\":[" + mods + "]") : "";
+                    Emit("{\\"type\\":\\"key\\",\\"vkCode\\":" + info.vkCode + modsField + ",\\"delay\\":" + delay + "}");
+                }
             }
         }
         return CallNextHookEx(keyHook, nCode, wParam, lParam);

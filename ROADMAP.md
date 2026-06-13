@@ -77,11 +77,15 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 
 **Done when:** You can record an auto-login to a real web dashboard, reboot the machine, and have the wall come up fully logged-in and navigated with zero interaction, reproducibly across 5 consecutive boots.
 
-- [ ] Inline editing of recorded delays and click coordinates.
-- [ ] Reorder actions by drag.
-- [ ] Support modifier combos (Ctrl+T, Alt+Tab, etc.) and scroll events — currently keys are raw VK codes and combos aren't handled cleanly.
-- [ ] "Test from step N" so debugging a long sequence doesn't require replaying from the start.
-- [ ] Document (and where feasible, detect) the already-logged-in case so a replay doesn't fire credentials into the wrong field.
+**Status: largely complete.** Playback moved to a native koffi `SendInput` engine (`src/main/input.ts`) — no PowerShell on the unattended path. Recording extended for modifiers + scroll. The editor gained inline editing, drag-reorder, and test-from-step. Plus the headline robustness win: DOM-driven web login for URL zones. Remaining: end-to-end reboot validation with a real dashboard.
+
+- [x] Playback rewritten on native `SendInput` (`input.ts`) — clean modifier combos + scroll, no per-playback `Add-Type` latency.
+- [x] Inline editing of recorded delays and click coordinates (Automation panel).
+- [x] Reorder actions by drag.
+- [x] Modifier combos (Ctrl+T) + scroll — recorder captures modifier state & wheel; player replays them.
+- [x] "Test from step N" — per-step play button.
+- [x] **DOM-aware web login for URL zones** (`webLogin` steps: `waitFor` / `fill` / `click` via injected JS against CSS selectors) — robust to page layout shifts; the headline auto-login path. Coordinate replay remains for app zones + as a fallback.
+- [ ] Already-logged-in case: partially handled (a `waitFor` step can gate on a logged-in marker); a full conditional skip overlaps with App Profiles and is deferred to **Phase 2.5**.
 
 ---
 
@@ -96,6 +100,7 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 - [ ] Profiles live in `userData/profiles/` (user-authored) plus a read-only bundled `examples/` set. Ship the **DSS client as an example profile** — the first example, not privileged code.
 - [ ] UI to create / edit a profile and attach one to an app zone.
 - [ ] Extend recording (Phase 2) to capture *which window* each action targeted, so recording a stubborn app authors a profile automatically.
+- [ ] **Conditional / already-logged-in handling** (requested): on every launch, skip login when a "logged-in" marker selector is already present, and re-run it when a session-expired marker appears. Applies to both `webLogin` (URL zones) and app profiles — `webLogin` already runs on every launch, so this is the conditional layer on top.
 
 ---
 

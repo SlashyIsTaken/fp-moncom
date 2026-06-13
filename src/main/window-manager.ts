@@ -2,7 +2,7 @@ import { IpcMain, BrowserWindow, screen } from 'electron';
 import * as path from 'path';
 import { execSync, spawn } from 'child_process';
 import { IPC } from '../shared/types';
-import type { ApplyPresetResult, CloseAllZonesReport, LaunchZoneResult, Zone } from '../shared/types';
+import type { ApplyPresetResult, CloseAllZonesReport, LaunchZoneResult, WebLoginStep, Zone } from '../shared/types';
 import { playActions } from './automation-manager';
 import { loadSettings, getZoomForUrl, setZoomForUrl, migrateAndPersistPreset } from './preset-store';
 import { getStableMonitors } from './monitors';
@@ -66,7 +66,59 @@ type AppCloseResult = {
  * Launch a URL in a frameless Electron BrowserWindow positioned exactly on the target zone.
  * No PID/HWND detection needed — we own the window.
  */
-function launchURLZone(url: string, x: number, y: number, w: number, h: number): void {
+/** Wait (poll) for a CSS selector to exist in the page. */
+async function waitForSelector(wc: Electron.WebContents, selector: string, timeoutMs = 15000): Promise<boolean> {
+  const sel = JSON.stringify(selector);
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      if (await wc.executeJavaScript(`!!document.querySelector(${sel})`, true)) return true;
+    } catch { /* page navigating */ }
+    await sleep(300);
+  }
+  return false;
+}
+
+/**
+ * Run DOM-driven auto-login steps against a URL zone's BrowserWindow. Uses the
+ * native value setter + input/change events so React/Vue-controlled inputs
+ * register the change (plain `.value =` doesn't trigger their handlers).
+ */
+async function runWebLogin(wc: Electron.WebContents, steps: WebLoginStep[]): Promise<void> {
+  for (const step of steps) {
+    const sel = JSON.stringify(step.selector);
+    try {
+      if (step.action === 'waitFor') {
+        const ok = await waitForSelector(wc, step.selector);
+        if (!ok) console.warn(`[MonCOM] webLogin waitFor timed out: ${step.selector}`);
+      } else if (step.action === 'fill') {
+        const val = JSON.stringify(step.value ?? '');
+        await wc.executeJavaScript(
+          `(()=>{const el=document.querySelector(${sel});if(!el)return false;el.focus();` +
+          `const proto=el instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;` +
+          `const d=Object.getOwnPropertyDescriptor(proto,'value');(d&&d.set?d.set.call(el,${val}):el.value=${val});` +
+          `el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`,
+          true,
+        );
+      } else if (step.action === 'click') {
+        await wc.executeJavaScript(`(()=>{const el=document.querySelector(${sel});if(!el)return false;el.click();return true;})()`, true);
+      }
+    } catch (e) {
+      console.error('[MonCOM] webLogin step failed:', step.action, step.selector, e);
+    }
+    if (step.delayMs && step.delayMs > 0) await sleep(step.delayMs);
+  }
+  console.log(`[MonCOM] webLogin completed (${steps.length} steps)`);
+}
+
+function launchURLZone(url: string, x: number, y: number, w: number, h: number, webLogin?: WebLoginStep[]): Promise<void> {
+  // Resolves once the page has loaded and any web-login steps have finished, so
+  // the caller can run coordinate automation *after* login.
+  let resolveLogin: () => void = () => {};
+  const loginDone = new Promise<void>((r) => { resolveLogin = r; });
+  let loginSettled = false;
+  const settleLogin = () => { if (!loginSettled) { loginSettled = true; resolveLogin(); } };
+
   const win = new BrowserWindow({
     x, y,
     width: w,
@@ -115,9 +167,23 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
     win.webContents.setZoomFactor(stored);
   };
 
-  win.webContents.on('did-finish-load', () => {
+  // Safety: never let the caller hang if the page never finishes loading.
+  const loginSafety = setTimeout(settleLogin, 25000);
+
+  let firstLoad = true;
+  win.webContents.on('did-finish-load', async () => {
     win.webContents.insertCSS(scrollbarCSS);
     applyPersistedZoom();
+    // Run auto-login once, after the initial page settles (not on later navigations).
+    if (firstLoad) {
+      firstLoad = false;
+      if (webLogin && webLogin.length > 0) {
+        try { await runWebLogin(win.webContents, webLogin); }
+        catch (e) { console.error('[MonCOM] webLogin failed:', e); }
+      }
+      clearTimeout(loginSafety);
+      settleLogin();
+    }
   });
   win.webContents.on('did-navigate', () => {
     win.webContents.insertCSS(scrollbarCSS);
@@ -127,12 +193,15 @@ function launchURLZone(url: string, x: number, y: number, w: number, h: number):
   launchedWindows.push(win);
 
   win.on('closed', () => {
+    clearTimeout(loginSafety);
+    settleLogin();
     zoneUrlByWebContentsId.delete(wcId);
     const idx = launchedWindows.indexOf(win);
     if (idx >= 0) launchedWindows.splice(idx, 1);
   });
 
   console.log(`[MonCOM] Opened URL zone: ${url} at (${x}, ${y}, ${w}, ${h})`);
+  return loginDone;
 }
 
 // ─── App zones: launch exe + move via native Win32 ───
@@ -295,8 +364,9 @@ async function launchZoneContent(zone: Zone, monitors: any[]): Promise<LaunchZon
 
   console.log(`[MonCOM] Zone: ${content.type} "${content.target}" → (${absX}, ${absY}, ${absW}, ${absH})`);
 
+  let urlLoginDone: Promise<void> | undefined;
   if (content.type === 'url') {
-    launchURLZone(content.target, absX, absY, absW, absH);
+    urlLoginDone = launchURLZone(content.target, absX, absY, absW, absH, content.webLogin);
   } else if (content.type === 'application') {
     const appLaunch = await launchAppZone(content.target, content.label, absX, absY, absW, absH);
     if (!appLaunch.success) {
@@ -313,8 +383,10 @@ async function launchZoneContent(zone: Zone, monitors: any[]): Promise<LaunchZon
 
   // Play automation actions if configured
   if (content.actions && content.actions.length > 0) {
-    // Wait for content to load, then add any configured extra buffer
-    await sleep(1500);
+    // For URL zones, wait until the page loaded and web-login finished so
+    // coordinate automation runs *after* login; otherwise use a fixed buffer.
+    if (urlLoginDone) await urlLoginDone;
+    else await sleep(1500);
     const extraDelay = content.launchDelay ?? 0;
     if (extraDelay > 0) {
       console.log(`[MonCOM] Waiting extra ${extraDelay}ms buffer for content to settle`);

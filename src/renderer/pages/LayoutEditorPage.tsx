@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Monitor, Save, Trash2, Play, Globe, AppWindow, Grid2x2, Grid3x3, Columns2, Rows2, Check, FolderOpen, Circle, Square, MousePointerClick, Keyboard, Type, X } from 'lucide-react';
+import { Monitor, Save, Trash2, Play, Globe, AppWindow, Grid2x2, Grid3x3, Columns2, Rows2, Check, FolderOpen, Circle, Square, MousePointerClick, Keyboard, Type, X, GripVertical, MoveVertical } from 'lucide-react';
 import { Tooltip } from '../components/Tooltip';
-import type { MonitorInfo, Zone, ZoneContent, Preset, AutomationAction } from '../../shared/types';
+import type { MonitorInfo, Zone, ZoneContent, Preset, AutomationAction, WebLoginStep } from '../../shared/types';
 import { formatApplyResult } from '../applyResultMessage';
 
 type SplitTemplate = {
@@ -381,6 +381,7 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
   const [target, setTarget] = useState(zone.content?.target || '');
   const [label, setLabel] = useState(zone.content?.label || '');
   const [actions, setActions] = useState<AutomationAction[]>(zone.content?.actions || []);
+  const [webLogin, setWebLogin] = useState<WebLoginStep[]>(zone.content?.webLogin || []);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
@@ -388,6 +389,7 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
     setTarget(zone.content?.target || '');
     setLabel(zone.content?.label || '');
     setActions(zone.content?.actions || []);
+    setWebLogin(zone.content?.webLogin || []);
     setShowAdvanced(!!zone.content?.label);
   }, [zone.id, zone.content]);
 
@@ -408,7 +410,15 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
       type, target: target.trim(), label: displayLabel,
       launchDelay: zone.content?.launchDelay,
       actions: actions.length > 0 ? actions : undefined,
+      webLogin: type === 'url' && webLogin.length > 0 ? webLogin : undefined,
     });
+  };
+
+  const handleWebLoginChange = (next: WebLoginStep[]) => {
+    setWebLogin(next);
+    if (zone.content) {
+      onUpdate({ ...zone.content, webLogin: next.length > 0 ? next : undefined });
+    }
   };
 
   const handleActionsChange = (newActions: AutomationAction[]) => {
@@ -435,7 +445,7 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
           return (
             <button
               key={t}
-              onClick={() => { setType(t); setTarget(''); setLabel(''); setActions([]); }}
+              onClick={() => { setType(t); setTarget(''); setLabel(''); setActions([]); setWebLogin([]); }}
               className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-all
                 ${isActive
                   ? 'bg-commander/15 text-commander border border-commander/30'
@@ -539,6 +549,11 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
         </button>
       </div>
 
+      {/* Web auto-login — URL zones only (robust, DOM-driven login) */}
+      {zone.content && zone.content.type === 'url' && (
+        <WebLoginPanel steps={webLogin} onChange={handleWebLoginChange} />
+      )}
+
       {/* Automation section — only visible when content is assigned */}
       {zone.content && (
         <AutomationPanel
@@ -548,6 +563,81 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
           onActionsChange={handleActionsChange}
           onLaunchDelayChange={handleLaunchDelayChange}
         />
+      )}
+    </div>
+  );
+}
+
+/* ─── Web Auto-Login Panel (URL zones) ─── */
+function WebLoginPanel({ steps, onChange }: { steps: WebLoginStep[]; onChange: (s: WebLoginStep[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const update = (i: number, patch: Partial<WebLoginStep>) => onChange(steps.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  const remove = (i: number) => onChange(steps.filter((_, idx) => idx !== i));
+  const add = () => { onChange([...steps, { action: 'fill', selector: '', value: '', delayMs: 0 }]); setOpen(true); };
+
+  return (
+    <div className="border-t border-border pt-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <h4 className="text-[10px] text-text-muted uppercase tracking-widest font-medium">Web auto-login</h4>
+          <Tooltip text="For website zones, drive login by CSS selector instead of coordinate clicks — robust to page layout changes. Steps run after the page loads: 'Wait for' waits until an element appears, 'Fill' types into a field, 'Click' presses a button. Tip: right-click an element in the page and Inspect to find its selector." />
+        </div>
+        {steps.length > 0 && (
+          <span className="text-[10px] text-text-secondary">{steps.length} step{steps.length !== 1 ? 's' : ''}</span>
+        )}
+      </div>
+
+      {steps.length > 0 && (
+        <button onClick={() => setOpen(!open)} className="text-[11px] text-text-muted hover:text-text-secondary transition-colors mb-2">
+          {open ? '- Hide steps' : '+ Show steps'}
+        </button>
+      )}
+
+      {(open || steps.length === 0) && (
+        <div className="space-y-1.5">
+          {steps.map((step, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <select
+                value={step.action}
+                onChange={(e) => update(i, { action: e.target.value as WebLoginStep['action'] })}
+                className="px-1.5 py-1 bg-bg-dark border border-border rounded text-[10px] text-text-secondary focus:outline-none focus:border-commander/60"
+              >
+                <option value="waitFor">Wait for</option>
+                <option value="fill">Fill</option>
+                <option value="click">Click</option>
+              </select>
+              <input
+                type="text"
+                value={step.selector}
+                onChange={(e) => update(i, { selector: e.target.value })}
+                placeholder="#email, .login-btn"
+                className="flex-1 min-w-0 px-2 py-1 bg-bg-dark border border-border rounded text-[10px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-commander/60"
+              />
+              {step.action === 'fill' && (
+                <input
+                  type="text"
+                  value={step.value || ''}
+                  onChange={(e) => update(i, { value: e.target.value })}
+                  placeholder="value"
+                  className="w-20 px-2 py-1 bg-bg-dark border border-border rounded text-[10px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-commander/60"
+                />
+              )}
+              <input
+                type="number" min={0} step={100}
+                value={step.delayMs || 0}
+                onChange={(e) => update(i, { delayMs: Math.max(0, parseInt(e.target.value) || 0) })}
+                className="w-12 px-1 py-1 bg-bg-dark border border-border rounded text-[10px] text-text-secondary text-center focus:outline-none focus:border-commander/60"
+                title="Pause after this step (ms)"
+              />
+              <button onClick={() => remove(i)} className="text-text-muted hover:text-danger transition-all shrink-0" title="Remove">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          <button onClick={add} className="text-[11px] text-commander hover:text-commander-core transition-colors">
+            + Add step
+          </button>
+        </div>
       )}
     </div>
   );
@@ -569,6 +659,8 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
   const [typeText, setTypeText] = useState('');
   const [typeDelay, setTypeDelay] = useState('500');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
 
   const [launching, setLaunching] = useState(false);
   const launchDelay = zone.content?.launchDelay ?? 0;
@@ -647,6 +739,35 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
     onActionsChange(actions.filter((_, i) => i !== index));
   };
 
+  const handleUpdateAction = (index: number, patch: Partial<AutomationAction>) => {
+    onActionsChange(actions.map((a, i) => (i === index ? { ...a, ...patch } : a)));
+  };
+
+  const handleDrop = (to: number) => {
+    setDropIndex(null);
+    if (dragIndex === null || dragIndex === to) { setDragIndex(null); return; }
+    const next = [...actions];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(to, 0, moved);
+    onActionsChange(next);
+    setDragIndex(null);
+  };
+
+  const handlePlayFrom = async (index: number) => {
+    if (index >= actions.length) return;
+    setPlaying(true);
+    try {
+      // Replay from this step onward (first step fires immediately).
+      await window.moncom?.playActions([{ ...actions[index], delay: 0 }, ...actions.slice(index + 1)], zone, monitors);
+    } finally {
+      setPlaying(false);
+    }
+  };
+
+  const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+  const MOD_LABEL: Record<string, string> = { ctrl: 'Ctrl', alt: 'Alt', shift: 'Shift', win: 'Win' };
+  const modPrefix = (mods?: string[]) => (mods && mods.length ? mods.map((m) => MOD_LABEL[m] || m).join('+') + '+' : '');
+
   const handleAddTypeAction = () => {
     if (!typeText.trim()) return;
     const delay = parseInt(typeDelay) || 500;
@@ -664,6 +785,8 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
         return <Keyboard className="w-3 h-3 text-warning" />;
       case 'type':
         return <Type className="w-3 h-3 text-success" />;
+      case 'scroll':
+        return <MoveVertical className="w-3 h-3 text-commander" />;
     }
   };
 
@@ -674,9 +797,13 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
       case 'right-click':
         return `Right-click (${((action.x || 0) * 100).toFixed(0)}%, ${((action.y || 0) * 100).toFixed(0)}%)`;
       case 'key':
-        return `Key: ${vkName(action.vkCode || 0)}`;
+        return `Key: ${modPrefix(action.modifiers)}${vkName(action.vkCode || 0)}`;
       case 'type':
         return `Type: "${(action.text || '').length > 16 ? (action.text || '').slice(0, 16) + '...' : action.text}"`;
+      case 'scroll': {
+        const n = action.deltaY || 0;
+        return `Scroll ${n >= 0 ? 'up' : 'down'} ${Math.abs(n)}`;
+      }
     }
   };
 
@@ -792,27 +919,72 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
           </button>
 
           {showActions && (
-            <div className="max-h-40 overflow-y-auto space-y-1 scrollbar-thin">
-              {actions.map((action, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 px-2.5 py-1.5 bg-bg-dark rounded-md group"
-                >
-                  {actionIcon(action)}
-                  <span className="flex-1 text-[11px] text-text-secondary truncate">
-                    {actionLabel(action)}
-                  </span>
-                  <span className="text-[10px] text-text-muted">
-                    {action.delay > 0 ? formatDelay(action.delay) : ''}
-                  </span>
-                  <button
-                    onClick={() => handleRemoveAction(i)}
-                    className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-danger transition-all"
+            <div className="max-h-56 overflow-y-auto space-y-1 scrollbar-thin">
+              {actions.map((action, i) => {
+                const positional = action.type === 'click' || action.type === 'right-click' || action.type === 'scroll';
+                return (
+                  <div
+                    key={i}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragIndex !== null && dragIndex !== i) setDropIndex(i); }}
+                    onDrop={() => handleDrop(i)}
+                    className={`flex items-center gap-1.5 px-2 py-1.5 bg-bg-dark rounded-md border-t-2 ${dropIndex === i && dragIndex !== null && dragIndex !== i ? 'border-commander' : 'border-transparent'} ${dragIndex === i ? 'opacity-40' : ''}`}
                   >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
+                    <span
+                      draggable
+                      onDragStart={(e) => { setDragIndex(i); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); }}
+                      onDragEnd={() => { setDragIndex(null); setDropIndex(null); }}
+                      className="cursor-grab text-text-muted/40 hover:text-text-muted shrink-0"
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="w-3 h-3" />
+                    </span>
+                    {actionIcon(action)}
+                    <span className="flex-1 min-w-0 text-[11px] text-text-secondary truncate" title={actionLabel(action)}>
+                      {actionLabel(action)}
+                    </span>
+                    {positional && (
+                      <>
+                        <input
+                          type="number" min={0} max={100}
+                          value={Math.round((action.x ?? 0) * 100)}
+                          onChange={(e) => handleUpdateAction(i, { x: clamp01((parseInt(e.target.value) || 0) / 100) })}
+                          className="w-9 px-1 py-0.5 bg-bg-surface border border-border rounded text-[10px] text-text-secondary text-center focus:outline-none focus:border-commander/60"
+                          title="X %"
+                        />
+                        <input
+                          type="number" min={0} max={100}
+                          value={Math.round((action.y ?? 0) * 100)}
+                          onChange={(e) => handleUpdateAction(i, { y: clamp01((parseInt(e.target.value) || 0) / 100) })}
+                          className="w-9 px-1 py-0.5 bg-bg-surface border border-border rounded text-[10px] text-text-secondary text-center focus:outline-none focus:border-commander/60"
+                          title="Y %"
+                        />
+                      </>
+                    )}
+                    <input
+                      type="number" min={0} step={100}
+                      value={action.delay}
+                      onChange={(e) => handleUpdateAction(i, { delay: Math.max(0, parseInt(e.target.value) || 0) })}
+                      className="w-12 px-1 py-0.5 bg-bg-surface border border-border rounded text-[10px] text-text-secondary text-center focus:outline-none focus:border-commander/60"
+                      title="Delay before this step (ms)"
+                    />
+                    <button
+                      onClick={() => handlePlayFrom(i)}
+                      disabled={playing}
+                      className="text-text-muted hover:text-success transition-all disabled:opacity-40 shrink-0"
+                      title="Test from this step"
+                    >
+                      <Play className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => handleRemoveAction(i)}
+                      className="text-text-muted hover:text-danger transition-all shrink-0"
+                      title="Remove"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
