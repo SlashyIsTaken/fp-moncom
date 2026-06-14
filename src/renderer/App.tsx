@@ -5,10 +5,11 @@ import { Sidebar } from './components/Sidebar';
 import { DashboardPage } from './pages/DashboardPage';
 import { LayoutEditorPage } from './pages/LayoutEditorPage';
 import { PresetsPage } from './pages/PresetsPage';
+import { ProfilesPage } from './pages/ProfilesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import type { Preset } from '../shared/types';
 
-export type Page = 'dashboard' | 'editor' | 'presets' | 'settings';
+export type Page = 'dashboard' | 'editor' | 'presets' | 'profiles' | 'settings';
 
 const isPreRelease = (() => {
   const major = parseInt(__APP_VERSION__.split('.')[0], 10);
@@ -34,6 +35,7 @@ export function App() {
       case 'dashboard': return <DashboardPage onNavigate={handleNavigate} />;
       case 'editor': return <LayoutEditorPage editingPreset={editingPreset} onNavigate={handleNavigate} />;
       case 'presets': return <PresetsPage onNavigate={handleNavigate} onEditPreset={handleEditPreset} />;
+      case 'profiles': return <ProfilesPage />;
       case 'settings': return <SettingsPage />;
     }
   };

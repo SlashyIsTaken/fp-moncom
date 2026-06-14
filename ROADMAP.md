@@ -100,7 +100,7 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 - [x] Profile schema (`AppProfile` / `WindowMatch` / `ProfileStep` / `ProfileAction` in `shared/types.ts`): a window matcher (`exe` / `titleContains` / `className`) + ordered steps (`waitFor` → `do`(click/key/wait) → `waitClose` / `position`). One JSON file per profile.
 - [x] Generic profile runner (`profile-runner.ts`) on the Phase 1 `waitForWindow` primitive + native input — replaces `resolveTargetWindow` in `launchAppZone` when `findProfileForExe` matches; default path stays as fallback.
 - [x] Profiles load from `userData/moncom-data/profiles/` (user) + a read-only bundled `examples/profiles/` (shipped via `extraResources`). **DSS ships as `examples/profiles/dss-client.json`** — data, not privileged code.
-- [ ] UI to create / edit a profile and see which applies to a zone's exe (until then, drop/edit a `.json` — see `examples/profiles/README.md`).
+- [x] UI to create / edit a profile — a dedicated **App Profiles** page (sidebar) with a structured step/action editor (match exe, per-step window matcher + flags + `do` actions), bundled "Example" badge, duplicate, delete, and an "open profiles folder" shortcut. _Optional polish: a "this app has a profile" hint in the zone editor._
 - [ ] Extend recording (Phase 2) to capture *which window* each action targeted, so recording a stubborn app authors a profile automatically.
 - [ ] **Conditional / already-logged-in handling** (requested): on every launch, skip login when a "logged-in" marker selector is already present, and re-run it when a session-expired marker appears. Applies to both `webLogin` (URL zones) and app profiles — `webLogin` already runs on every launch, so this is the conditional layer on top.
 

@@ -211,6 +211,10 @@ export const IPC = {
   IS_ELEVATED: 'is-elevated',
   IDENTIFY_MONITOR: 'identify-monitor',
   HAS_LAUNCHED_WINDOWS: 'has-launched-windows',
+  GET_PROFILES: 'get-profiles',
+  SAVE_PROFILE: 'save-profile',
+  DELETE_PROFILE: 'delete-profile',
+  OPEN_PROFILES_FOLDER: 'open-profiles-folder',
   /** Sent from URL-zone preload to step zoom in/out (delta: +1 or -1). */
   ZONE_ZOOM_STEP: 'zone-zoom-step',
   /** Sent from URL-zone preload to reset zoom to 1.0. */

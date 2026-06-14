@@ -1,5 +1,6 @@
 import type {
   ApplyPresetResult,
+  AppProfile,
   AppSettings,
   AutomationAction,
   CloseAllZonesReport,
@@ -8,6 +9,11 @@ import type {
   Preset,
   Zone,
 } from '../shared/types';
+
+export interface ProfileEntry {
+  profile: AppProfile;
+  bundled: boolean;
+}
 
 export interface MonCOMAPI {
   getMonitors(): Promise<MonitorInfo[]>;
@@ -28,6 +34,10 @@ export interface MonCOMAPI {
   isElevated(): Promise<boolean>;
   identifyMonitors(): Promise<void>;
   hasLaunchedWindows(): Promise<boolean>;
+  getProfiles(): Promise<ProfileEntry[]>;
+  saveProfile(profile: AppProfile): Promise<ProfileEntry[]>;
+  deleteProfile(id: string): Promise<ProfileEntry[]>;
+  openProfilesFolder(): Promise<string>;
   openExternal(url: string): Promise<void>;
   windowMinimize(): void;
   windowMaximize(): void;

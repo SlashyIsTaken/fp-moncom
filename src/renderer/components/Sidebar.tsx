@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, PenTool, Bookmark, Settings, Monitor } from 'lucide-react';
+import { LayoutDashboard, PenTool, Bookmark, Settings, Monitor, Workflow } from 'lucide-react';
 import type { Page } from '../App';
 
 interface SidebarProps {
@@ -11,6 +11,7 @@ const navItems: { page: Page; label: string; icon: React.ComponentType<any> }[] 
   { page: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { page: 'editor', label: 'Layout Editor', icon: PenTool },
   { page: 'presets', label: 'Presets', icon: Bookmark },
+  { page: 'profiles', label: 'App Profiles', icon: Workflow },
   { page: 'settings', label: 'Settings', icon: Settings },
 ];
 

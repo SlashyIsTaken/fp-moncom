@@ -15,6 +15,7 @@
  * as `intptr_t` (plain JS numbers — real window handles fit well within 2^53).
  */
 import koffi from 'koffi';
+import { normalizeExe } from '../shared/exe';
 
 const user32 = koffi.load('user32.dll');
 const dwmapi = koffi.load('dwmapi.dll');
@@ -174,9 +175,7 @@ function getProcessName(pid: number): string {
       const buf = Buffer.alloc(2048);
       const size: [number] = [1024];
       if (QueryFullProcessImageNameW(h, 0, buf, size)) {
-        const full = readWide(buf, size[0]);
-        const base = full.split(/[\\/]/).pop() || '';
-        name = base.replace(/\.exe$/i, '').toLowerCase();
+        name = normalizeExe(readWide(buf, size[0]));
       }
     } finally {
       CloseHandle(h);

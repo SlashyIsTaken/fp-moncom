@@ -8,12 +8,13 @@
 import type { AppProfile, ProfileAction, WindowMatch, KeyModifier } from '../shared/types';
 import { enumWindows, waitForWindow, isWindow, focusWindow, type WindowInfo, type WindowMatcher } from './win32';
 import * as input from './input';
+import { normalizeExe } from '../shared/exe';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function matches(w: WindowInfo, m: WindowMatch): boolean {
   if (!m.exe && !m.titleContains && !m.className) return false; // empty matcher never matches
-  if (m.exe && w.processName !== m.exe.toLowerCase()) return false;
+  if (m.exe && w.processName !== normalizeExe(m.exe)) return false;
   if (m.titleContains && !w.title.toLowerCase().includes(m.titleContains.toLowerCase())) return false;
   if (m.className && w.className.toLowerCase() !== m.className.toLowerCase()) return false;
   return true;

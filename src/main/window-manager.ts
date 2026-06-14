@@ -8,6 +8,7 @@ import { loadSettings, getZoomForUrl, setZoomForUrl, migrateAndPersistPreset } f
 import { getStableMonitors } from './monitors';
 import { findProfileForExe } from './profile-store';
 import { runProfile } from './profile-runner';
+import { normalizeExe } from '../shared/exe';
 import {
   enumWindows,
   waitForWindow,
@@ -40,12 +41,6 @@ function isProcessElevated(): boolean {
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-/** Lowercased exe base name without extension, e.g. "C:\…\Spotify.exe" → "spotify". */
-function exeBaseName(target: string): string {
-  const parts = target.replace(/\\/g, '/').split('/');
-  return (parts[parts.length - 1]?.replace(/\.(exe|lnk|bat|cmd)$/i, '') || '').toLowerCase();
-}
 
 /** Track launched Electron BrowserWindows (for URLs) */
 const launchedWindows: BrowserWindow[] = [];
@@ -247,7 +242,7 @@ async function launchAppZone(
 ): Promise<{ success: boolean; error?: string; hwnd?: number; pid?: number }> {
   // Snapshot windows before launch to distinguish "new window" from single-instance reuse.
   const before = new Set(enumWindows({ requireTitle: false }).map((wi) => wi.hwnd));
-  const exeName = exeBaseName(target);
+  const exeName = normalizeExe(target);
   console.log(`[MonCOM] Launching app: ${target} (${before.size} existing windows)`);
 
   const settings = loadSettings();

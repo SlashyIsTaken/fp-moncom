@@ -53,6 +53,7 @@ MonCOM (Monitor Commander) is a Windows Electron desktop app for splitting monit
 - URLs are normalized: if no protocol, `https://` is prepended before launch.
 
 ## Known quirks / gotchas
+- **Exe matching always goes through `normalizeExe` (`src/shared/exe.ts`)** — basename, strip launcher ext (.exe/.lnk/.bat/…), trim, lowercase. Applied on both sides of every comparison (win32 `getProcessName`, `launchAppZone`, `findProfileForExe`, `runProfile` matcher) and when saving a profile (normalizes `match.exe` + every step's `waitFor.exe`). Never compare raw exe strings; users may paste a path, omit/add `.exe`, or use any casing. Profile UI also has a Browse button + a live "Matches launches of …" hint.
 - Monitor ids are **stable hardware (EDID) ids** from `monitors.ts` — never reintroduce per-path id generation; always go through `getStableMonitors`. Presets saved before this scheme (old Electron `display.id`, or position-only ids) that also lack `monitorBounds` can't auto-migrate — they must be recreated. New presets store `monitorBounds`, so they rematch by bounds if an id ever drifts.
 - Don't re-introduce runtime elevation detection per-zone — it was removed by user request; use the static note instead.
 - Don't add `overflow: hidden` on scroll containers for webview-based zones — it blocks scrolling. Use `::-webkit-scrollbar { display: none }` + `scrollbar-width: none`.

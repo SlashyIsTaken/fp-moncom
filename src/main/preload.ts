@@ -43,6 +43,12 @@ contextBridge.exposeInMainWorld('moncom', {
   // Launched windows
   hasLaunchedWindows: () => ipcRenderer.invoke(IPC.HAS_LAUNCHED_WINDOWS),
 
+  // App Profiles
+  getProfiles: () => ipcRenderer.invoke(IPC.GET_PROFILES),
+  saveProfile: (p: any) => ipcRenderer.invoke(IPC.SAVE_PROFILE, p),
+  deleteProfile: (id: string) => ipcRenderer.invoke(IPC.DELETE_PROFILE, id),
+  openProfilesFolder: () => ipcRenderer.invoke(IPC.OPEN_PROFILES_FOLDER),
+
   // Shell
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
 

@@ -3,6 +3,7 @@ import * as path from 'path';
 import { execSync, spawn } from 'child_process';
 import { registerWindowHandlers, applyPresetFromMain } from './window-manager';
 import { registerPresetHandlers, loadSettings, loadPresets } from './preset-store';
+import { registerProfileHandlers } from './profile-store';
 import { getStableMonitors } from './monitors';
 import { startRecording, stopRecording, playActions } from './automation-manager';
 import type { MonitorInfo } from '../shared/types';
@@ -199,6 +200,7 @@ app.whenReady().then(() => {
   // Register other IPC handlers
   registerWindowHandlers(ipcMain);
   registerPresetHandlers(ipcMain);
+  registerProfileHandlers(ipcMain);
 
   // Automation: recording & playback
   ipcMain.handle(IPC.START_RECORDING, (_event, zone, monitors) => {
