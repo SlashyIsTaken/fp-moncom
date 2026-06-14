@@ -24,10 +24,13 @@ node tools/capture/capture.mjs
 # 2. Encode. Crop is the canvas region within the 1600x1000 page; the wall
 #    sits in a band with black headroom kept for the taller 2×2 / 3×3 layouts.
 cd tools/capture
-CROP="crop=656:600:161:220"
+# Crop: the canvas region, with ~4px shaved off the left (a grey scene edge) and
+# even dimensions for libx264. Start at a later cycle (-ss 29.8) to skip the
+# initial fade-in, which renders near-black and looks like a buggy page load.
+CROP="crop=652:600:165:220"
 
-# Master MP4 — full cycle, crisp, ~1.3MB (best for a <video> embed).
-ffmpeg -y -ss 1.2 -t 28.6 -i video/wall.webm -vf "$CROP" \
+# Master MP4: one full layout cycle, crisp (best for a <video> embed).
+ffmpeg -y -ss 29.8 -t 28.6 -i video/wall.webm -vf "$CROP" \
   -c:v libx264 -crf 20 -pix_fmt yuv420p -movflags +faststart ../../assets/moncom-wall.mp4
 
 # Hero GIF — full layout loop, inline-sized (~380px), palette-optimized.
