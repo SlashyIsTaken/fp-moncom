@@ -82,7 +82,7 @@ export function SettingsPage() {
       <section className="bg-bg-surface border border-border rounded-xl mb-6">
         <div className="px-6 py-4 border-b border-border flex items-center gap-2">
           <h2 className="text-sm font-semibold text-text-primary">Administrator Privileges</h2>
-          <Tooltip text="Only enable this if you need to launch applications that require administrator privileges. When enabled, MonCOM must be started as administrator for elevated apps to launch correctly." />
+          <Tooltip text="Lets MonCOM launch apps that need administrator rights. Asks for permission when MonCOM starts." />
         </div>
 
         <SettingRow
@@ -97,9 +97,8 @@ export function SettingsPage() {
           <div className="px-6 py-4 border-t border-border flex items-start gap-3 bg-warning/5">
             <ShieldAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
             <p className="text-xs text-text-secondary leading-relaxed">
-              With this enabled, MonCOM must be launched as administrator for elevated apps to work.
-              If you do not need to launch programs that require elevation, leave this off.
-              Right-click MonCOM and select <span className="text-text-primary font-medium">"Run as administrator"</span> when starting the app.
+              With this on, MonCOM asks for administrator permission each time it starts.
+              Leave it off unless you need to launch apps that require elevation.
             </p>
           </div>
         )}
@@ -109,7 +108,7 @@ export function SettingsPage() {
       <section className="bg-bg-surface border border-border rounded-xl mb-6">
         <div className="px-6 py-4 border-b border-border flex items-center gap-2">
           <h2 className="text-sm font-semibold text-text-primary">Auto-launch Preset</h2>
-          <Tooltip text="When enabled, MonCOM will automatically apply your chosen preset when the app starts. Combine with 'Launch on startup' to have your monitors configured automatically after every boot." />
+          <Tooltip text="Applies the chosen preset automatically when MonCOM starts. Pair with Launch on startup to set up your monitors on every boot." />
         </div>
 
         <SettingRow

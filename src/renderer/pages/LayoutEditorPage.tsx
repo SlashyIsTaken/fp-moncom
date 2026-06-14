@@ -179,7 +179,7 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Tooltip text="Launches all configured zones on your actual monitors right now." />
+          <Tooltip text="Opens all configured zones on your monitors now." />
           <button
             onClick={handleApply}
             disabled={configuredCount === 0}
@@ -200,7 +200,7 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
               <h3 className="text-xs font-semibold text-text-muted uppercase tracking-widest">
                 Monitor Map
               </h3>
-              <Tooltip text="This shows your connected monitors as detected by Windows. Click a zone to select it, then configure it in the right panel." />
+              <Tooltip text="Your connected monitors. Click a zone to select it, then set it up in the right panel." />
             </div>
             <div className="flex items-center justify-center">
               <div
@@ -261,7 +261,7 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
               <h3 className="text-xs font-semibold text-text-muted uppercase tracking-widest">
                 Split Templates
               </h3>
-              <Tooltip text="Choose a template to divide a monitor into zones. You can apply different templates to each monitor." />
+              <Tooltip text="Splits a monitor into zones. Each monitor can use a different template." />
             </div>
             <div className="space-y-5">
               {monitors.map((m) => (
@@ -293,7 +293,7 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
               <h3 className="text-xs font-semibold text-text-muted uppercase tracking-widest">
                 Zone Properties
               </h3>
-              <Tooltip text="Select a zone on the map, then assign a URL or application to it here." />
+              <Tooltip text="Assigns a website or app to the selected zone." />
             </div>
             {selectedZoneData ? (
               <ZoneEditor
@@ -318,7 +318,7 @@ export function LayoutEditorPage({ editingPreset, onNavigate }: LayoutEditorPage
               <h3 className="text-xs font-semibold text-text-muted uppercase tracking-widest">
                 {editingId ? 'Update Preset' : 'Save as Preset'}
               </h3>
-              <Tooltip text={editingId ? "Save changes to this existing preset." : "Save this layout so you can quickly apply it later from the Dashboard or Presets page."} />
+              <Tooltip text={editingId ? "Saves your changes to this preset." : "Saves this layout as a preset you can apply later."} />
             </div>
             <input
               type="text"
@@ -515,7 +515,7 @@ function ZoneEditor({ zone, monitors, onUpdate, onRemove }: {
             <label className="text-[10px] text-text-muted uppercase tracking-widest font-medium">
               Window title hint
             </label>
-            <Tooltip text="Optional fallback. If MonCOM can't find the launched window automatically, it will search for a window whose title contains this text." />
+            <Tooltip text="Optional. If MonCOM can't find the app's window automatically, it looks for one whose title contains this text." />
           </div>
           <input
             type="text"
@@ -580,7 +580,7 @@ function WebLoginPanel({ steps, onChange }: { steps: WebLoginStep[]; onChange: (
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <h4 className="text-[10px] text-text-muted uppercase tracking-widest font-medium">Web auto-login</h4>
-          <Tooltip text="For website zones, drive login by CSS selector instead of coordinate clicks — robust to page layout changes. Steps run after the page loads (and on every launch): 'Wait for' waits until an element appears, 'Skip if present' stops the sequence when a logged-in marker is already there (so it skips when logged in and re-logs-in when the session expired), 'Fill' types into a field, 'Click' presses a button. Tip: right-click an element in the page and Inspect to find its selector." />
+          <Tooltip text="Logs into a website by targeting page elements. Steps run after the page loads: wait for an element, skip if a logged-in marker is present, fill a field, or click a button." />
         </div>
         {steps.length > 0 && (
           <span className="text-[10px] text-text-secondary">{steps.length} step{steps.length !== 1 ? 's' : ''}</span>
@@ -815,7 +815,7 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
           <h4 className="text-[10px] text-text-muted uppercase tracking-widest font-medium">
             Automation
           </h4>
-          <Tooltip text="Record mouse clicks and keyboard input to replay automatically after this zone's content launches. Clicking Record starts a countdown, then launches the zone's content so the real startup time is captured. Use the launch delay to add extra buffer if the content needs more time. Switch to the launched window, perform your actions, then come back and click Stop." />
+          <Tooltip text="Records clicks and keystrokes, then replays them each time this zone opens. Click Record, do your actions in the window, then click Stop." />
         </div>
         {actions.length > 0 && (
           <span className="text-[10px] text-text-secondary">
@@ -836,7 +836,7 @@ function AutomationPanel({ zone, monitors, actions, onActionsChange, onLaunchDel
           className="w-20 px-2 py-1 bg-bg-dark border border-border rounded-md text-xs text-text-primary focus:outline-none focus:border-commander/60 transition-colors"
         />
         <span className="text-[10px] text-text-muted">ms</span>
-        <Tooltip text="Extra buffer after content launches before automation plays. The real startup time is already accounted for — increase this only if the content needs additional time to settle." />
+        <Tooltip text="Extra wait after the app or page opens before automation runs. Increase it only if the content needs more time to load." />
       </div>
 
       {/* Launch / countdown overlay */}

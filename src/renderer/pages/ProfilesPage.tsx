@@ -180,7 +180,7 @@ function ProfileEditor({ draft, setDraft, onSave, onCancel, isNew, status }: {
         <div>
           <div className="flex items-center gap-2">
             <label className="text-[10px] text-text-muted uppercase tracking-widest font-medium">Applies to exe</label>
-            <Tooltip text="Type the app name or browse to its .exe. Paste a full path, the name with or without .exe, any casing — MonCOM normalizes it. 'C:\\…\\DSS Client.exe' becomes 'dss client'." />
+            <Tooltip text="The app this profile runs for. Type its name or browse to the .exe; the exact path, extension, and casing don't matter." />
           </div>
           <div className="flex gap-2 mt-1.5">
             <input value={draft.match.exe || ''} onChange={(e) => setDraft({ ...draft, match: { ...draft.match, exe: e.target.value } })} placeholder="dss client"
@@ -197,7 +197,7 @@ function ProfileEditor({ draft, setDraft, onSave, onCancel, isNew, status }: {
 
       <div className="flex items-center gap-2 mb-2">
         <h4 className="text-[10px] text-text-muted uppercase tracking-widest font-medium">Steps</h4>
-        <Tooltip text="Each step waits for a window, optionally acts on it, optionally waits for it to close, then continues. Mark the step whose window should be placed in the zone. For apps where every window shares a title, match by exe and rely on order + 'wait for close'." />
+        <Tooltip text="Steps run in order. Each waits for a window, optionally acts on it, then continues. Mark the step whose window gets placed in the zone." />
       </div>
 
       <div className="space-y-3">

@@ -51,6 +51,7 @@ MonCOM (Monitor Commander) is a Windows Electron desktop app for splitting monit
 - Pre-release banner visible while major version < 1.
 - Settings auto-save (no Save button) — `useRef` skips the initial load; subsequent state changes trigger `saveSettings`.
 - URLs are normalized: if no protocol, `https://` is prepended before launch.
+- **Microcopy / tooltips — agreed house style (descriptive voice):** state what the control does in third person, leading with a verb ("Opens…", "Records…", "Lets MonCOM…"). One sentence; two only when a *why/when* prevents a mistake. No em dashes (use a period or comma). No internal jargon (no "CSS selector", "coordinate replay", "VK code", "normalizes"). Sentence case, end with a period. Don't restate the label. Keep new tooltips consistent with the ones in `LayoutEditorPage`/`SettingsPage`/`ProfilesPage`.
 
 ## Known quirks / gotchas
 - **Exe matching always goes through `normalizeExe` (`src/shared/exe.ts`)** — basename, strip launcher ext (.exe/.lnk/.bat/…), trim, lowercase. Applied on both sides of every comparison (win32 `getProcessName`, `launchAppZone`, `findProfileForExe`, `runProfile` matcher) and when saving a profile (normalizes `match.exe` + every step's `waitFor.exe`). Never compare raw exe strings; users may paste a path, omit/add `.exe`, or use any casing. Profile UI also has a Browse button + a live "Matches launches of …" hint.
