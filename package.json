@@ -34,6 +34,9 @@
     },
     "files": [
       "dist/**/*"
+    ],
+    "extraResources": [
+      { "from": "examples", "to": "examples" }
     ]
   },
   "dependencies": {

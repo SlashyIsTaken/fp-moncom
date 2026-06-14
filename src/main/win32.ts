@@ -239,6 +239,13 @@ export function isWindow(hwnd: number): boolean {
   return !!IsWindow(hwnd);
 }
 
+/** Restore (if minimized) and bring a window to the foreground. Best-effort (UIPI/foreground-lock may block). */
+export function focusWindow(hwnd: number): void {
+  if (!IsWindow(hwnd)) return;
+  if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+  SetForegroundWindow(hwnd);
+}
+
 /** True DWM frame insets (left/top/right/bottom) between GetWindowRect and the visible frame. */
 function frameInsets(hwnd: number): { left: number; top: number; right: number; bottom: number } {
   const win: Rect = { left: 0, top: 0, right: 0, bottom: 0 };

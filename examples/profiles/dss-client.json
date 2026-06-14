@@ -1,0 +1,23 @@
+{
+  "id": "dss-client",
+  "name": "DSS Client",
+  "match": { "exe": "dss client" },
+  "steps": [
+    {
+      "waitFor": { "exe": "dss client" },
+      "timeoutMs": 20000,
+      "do": [{ "type": "key", "vkCode": 13 }],
+      "waitClose": true
+    },
+    {
+      "waitFor": { "exe": "dss client" },
+      "timeoutMs": 30000,
+      "waitClose": true
+    },
+    {
+      "waitFor": { "exe": "dss client" },
+      "timeoutMs": 30000,
+      "position": true
+    }
+  ]
+}

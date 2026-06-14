@@ -6,6 +6,8 @@ import type { ApplyPresetResult, CloseAllZonesReport, LaunchZoneResult, WebLogin
 import { playActions } from './automation-manager';
 import { loadSettings, getZoomForUrl, setZoomForUrl, migrateAndPersistPreset } from './preset-store';
 import { getStableMonitors } from './monitors';
+import { findProfileForExe } from './profile-store';
+import { runProfile } from './profile-runner';
 import {
   enumWindows,
   waitForWindow,
@@ -271,6 +273,22 @@ async function launchAppZone(
   } catch (e) {
     console.error('[MonCOM] App launch failed:', e);
     return { success: false, error: `Application launch failed: ${target}` };
+  }
+
+  // If an App Profile matches this exe, run its launch recipe (acks warning
+  // dialogs, waits through login windows, etc.) and position the window it
+  // designates. The default path below remains the fallback if it can't resolve.
+  const profile = findProfileForExe(exeName);
+  if (profile) {
+    console.log(`[MonCOM] Using app profile: ${profile.name}`);
+    const profileTarget = await runProfile(profile, before);
+    if (profileTarget) {
+      const moved = moveWindowToVisibleRect(profileTarget.hwnd, x, y, w, h, { foreground: true });
+      if (moved) return { success: true, hwnd: profileTarget.hwnd, pid: profileTarget.pid };
+      console.log('[MonCOM] Profile target move failed (UIPI?); falling back to default.');
+    } else {
+      console.warn('[MonCOM] Profile resolved no target window; falling back to default.');
+    }
   }
 
   // Allow extra time when a UAC prompt is in the path.

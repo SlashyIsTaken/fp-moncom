@@ -95,10 +95,12 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 
 **Done when:** A picky app is brought up unattended by a profile that acks its warning dialog, waits through its auto-login window, and positions the *final* window — and that profile is a JSON file a user created in the UI, with the bundled DSS example shipped as data, not code.
 
-- [ ] Define the profile schema: a window matcher (`exe` / `titleContains` / `class`) + an ordered list of steps (`waitWindow → act`, `waitClose`, `position`). One JSON file per profile.
-- [ ] Generic profile runner in the main process, built on the Phase 1 `WindowMatcher` / `waitForWindow` primitive — it replaces the default `resolveTargetWindow` when a zone's app has a matching profile.
-- [ ] Profiles live in `userData/profiles/` (user-authored) plus a read-only bundled `examples/` set. Ship the **DSS client as an example profile** — the first example, not privileged code.
-- [ ] UI to create / edit a profile and attach one to an app zone.
+**Status: engine complete & verified.** Schema + storage + runner are in, builds green, and the bundled DSS example loads and matches by exe. The launch path runs a matching profile instead of the default window-finder. Remaining: the authoring UI, recording-authors-profiles, and the conditional layer.
+
+- [x] Profile schema (`AppProfile` / `WindowMatch` / `ProfileStep` / `ProfileAction` in `shared/types.ts`): a window matcher (`exe` / `titleContains` / `className`) + ordered steps (`waitFor` → `do`(click/key/wait) → `waitClose` / `position`). One JSON file per profile.
+- [x] Generic profile runner (`profile-runner.ts`) on the Phase 1 `waitForWindow` primitive + native input — replaces `resolveTargetWindow` in `launchAppZone` when `findProfileForExe` matches; default path stays as fallback.
+- [x] Profiles load from `userData/moncom-data/profiles/` (user) + a read-only bundled `examples/profiles/` (shipped via `extraResources`). **DSS ships as `examples/profiles/dss-client.json`** — data, not privileged code.
+- [ ] UI to create / edit a profile and see which applies to a zone's exe (until then, drop/edit a `.json` — see `examples/profiles/README.md`).
 - [ ] Extend recording (Phase 2) to capture *which window* each action targeted, so recording a stubborn app authors a profile automatically.
 - [ ] **Conditional / already-logged-in handling** (requested): on every launch, skip login when a "logged-in" marker selector is already present, and re-run it when a session-expired marker appears. Applies to both `webLogin` (URL zones) and app profiles — `webLogin` already runs on every launch, so this is the conditional layer on top.
 

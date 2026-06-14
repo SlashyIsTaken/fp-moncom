@@ -83,6 +83,58 @@ export interface ZoneContent {
   webLogin?: WebLoginStep[];
 }
 
+// ─── App Profiles: data-driven launch recipes for stubborn, multi-window apps ───
+
+/** Criteria to match a top-level window. All provided fields must match (AND). */
+export interface WindowMatch {
+  /** Process exe base name, lowercased, no extension (e.g. "dssclient"). */
+  exe?: string;
+  /** Case-insensitive substring of the window title. */
+  titleContains?: string;
+  /** Window class name (case-insensitive, exact). */
+  className?: string;
+}
+
+/** An action performed on a matched window during a profile step. */
+export interface ProfileAction {
+  type: 'click' | 'key' | 'wait';
+  /** Click position relative to the matched window (0-1), for `click`. */
+  x?: number;
+  y?: number;
+  /** Use the right mouse button, for `click`. */
+  right?: boolean;
+  /** Virtual key code, for `key`. */
+  vkCode?: number;
+  modifiers?: KeyModifier[];
+  /** Milliseconds to wait, for `wait`. */
+  ms?: number;
+}
+
+/** One step of a launch recipe: wait for a window, optionally act, optionally mark it as the target. */
+export interface ProfileStep {
+  /** Wait for a not-yet-handled window matching this. */
+  waitFor: WindowMatch;
+  /** Max wait for this step (ms, default 15000). */
+  timeoutMs?: number;
+  /** If the window never appears, continue instead of aborting the recipe. */
+  optional?: boolean;
+  /** Actions to perform once the window is matched. */
+  do?: ProfileAction[];
+  /** Wait for the matched window to close before the next step. */
+  waitClose?: boolean;
+  /** Mark the matched window as the one to position in the zone. */
+  position?: boolean;
+}
+
+/** A data-driven launch recipe for a stubborn, multi-window app (e.g. a DSS/CCTV client). */
+export interface AppProfile {
+  id: string;
+  name: string;
+  /** Which app this applies to (matched against the launched exe). */
+  match: WindowMatch;
+  steps: ProfileStep[];
+}
+
 export interface AppWindowCloseFailure {
   hwnd: string;
   reason: string;
