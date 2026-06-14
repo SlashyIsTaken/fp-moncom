@@ -5,11 +5,6 @@
 </p>
 
 <p align="center">
-  Launch a wall of apps and dashboards into exact positions — logged in and ready —<br/>
-  in one click, or automatically the moment Windows boots.
-</p>
-
-<p align="center">
   <a href="#what-is-moncom">What is MonCOM?</a> •
   <a href="#why-not-just-fancyzones">Why not FancyZones?</a> •
   <a href="#features">Features</a> •
@@ -28,29 +23,42 @@
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
 </p>
 
-<p align="center">
-  <img src="assets/moncom-wall.gif" alt="MonCOM reconfiguring a video wall — one display splitting into two, four, and nine live zones across multiple monitors" width="600" />
-</p>
+<table>
+<tr>
+<td valign="middle" width="55%">
 
-> **Note:** MonCOM is currently in pre-release (v0.x). Features may be incomplete, unstable, or subject to change. There will be no downloadable release until the project reaches a stable version. Until then, follow the [Building from Source](#building-from-source) instructions to run it.
+**MonCOM brings up your entire multi-monitor workspace in one click.**
+
+Describe once which apps and dashboards go where, across every display, and save it as a preset. MonCOM opens each one, positions it exactly, and can log it in for you. Run it on demand, or automatically when Windows starts.
+
+Built for ops walls, dashboard kiosks, and any setup that's more than a couple of windows.
+
+</td>
+<td valign="middle" width="45%">
+<img src="assets/moncom-wall.gif" alt="MonCOM reconfiguring a video wall across multiple monitors" width="100%" />
+</td>
+</tr>
+</table>
+
+> **Note:** MonCOM is in pre-release (v0.x). Features may be incomplete or change, and there is no downloadable build yet. Until then, see [Building from Source](#building-from-source).
 
 ---
 
 ## What is MonCOM?
 
-MonCOM (Monitor Commander) turns a wall of monitors into a single, repeatable command center. You describe your workspace once — which apps and dashboards go where, across every display — save it as a preset, and bring the whole thing up with one click or automatically when Windows boots.
+MonCOM (Monitor Commander) turns a wall of monitors into a single, repeatable command center. You describe your workspace once: which apps and dashboards go where, across every display. Save it as a preset, then bring the whole thing up with one click, or automatically when Windows boots.
 
-It doesn't just open windows in the right place. Each zone can **log itself in, dismiss a startup dialog, and navigate to the right view** by replaying a sequence you record once. So a six-screen ops wall, a monitoring kiosk, or a fixed trading layout comes up fully positioned *and* fully signed in — unattended.
+It doesn't just open windows in the right place. Each zone can **log itself in, dismiss a startup dialog, and navigate to the right view** by replaying a sequence you record once. A six-screen ops wall, a monitoring kiosk, or a fixed trading layout comes up fully positioned and fully signed in, with no one at the keyboard.
 
-It's built for the set-it-up-once, run-it-daily crowd: NOC and ops walls, dashboard kiosks, streaming rigs, and anyone whose "workspace" is more than a couple of windows.
+It's built for the set-it-up-once, run-it-daily crowd: NOC and ops walls, dashboard kiosks, streaming rigs, and anyone whose workspace is more than a couple of windows.
 
 ---
 
 ## Why not just FancyZones?
 
-If you want to drag a window into a zone *while you work*, use [PowerToys FancyZones](https://learn.microsoft.com/windows/powertoys/fancyzones) — it's free, excellent, and MonCOM doesn't try to replace it.
+If you want to drag a window into a zone while you work, use [PowerToys FancyZones](https://learn.microsoft.com/windows/powertoys/fancyzones). It's free, excellent, and MonCOM doesn't try to replace it.
 
-MonCOM solves a different problem. FancyZones helps you place a window **you've already opened**. MonCOM **opens the windows for you** — the right apps and URLs, on the right monitors, in the right zones — then drives them past the login screen, on demand or on boot. One is a snapping tool. The other brings up an entire workspace, repeatably, with no clicks.
+MonCOM solves a different problem. FancyZones helps you place a window **you've already opened**. MonCOM **opens the windows for you**: the right apps and URLs, on the right monitors, in the right zones. Then it drives them past the login screen, on demand or on boot. One is a snapping tool. The other brings up an entire workspace, repeatably, with no clicks.
 
 | | FancyZones / DisplayFusion | MonCOM |
 |---|:---:|:---:|
@@ -67,7 +75,7 @@ If your workspace is "snap my editor next to my browser," that's FancyZones. If 
 ## Features
 
 ### Monitor Detection
-MonCOM automatically detects all connected displays and reads their resolution, position, scale factor, and primary status — no manual configuration needed.
+MonCOM detects all connected displays and reads their resolution, position, scale factor, and primary status. No manual setup needed.
 
 ### Layout Editor
 Split any monitor into zones using built-in templates:
@@ -82,32 +90,32 @@ Split any monitor into zones using built-in templates:
 | **Main + Side** | 70/30 split for a primary + sidebar workflow |
 
 Each zone can be assigned either:
-- **A URL** — opens in a frameless, positioned browser window
-- **An application** — launches the executable and moves it into position
+- **A URL** opens in a frameless browser window, positioned on the zone.
+- **An application** launches and moves into position.
 
-### Auto-Login & Action Playback — the headline feature
-This is what sets MonCOM apart from a plain window-snapping tool. After assigning content to a zone, you can record a click and keyboard sequence that MonCOM replays automatically every time that zone launches — so the window doesn't just open in position, it arrives logged in and ready. This is useful for:
+### Auto-Login & Action Playback (the headline feature)
+This is what sets MonCOM apart from a plain window-snapping tool. After assigning content to a zone, you can record a click and keyboard sequence that MonCOM replays every time that zone launches. The window doesn't just open in position; it arrives logged in and ready. Use it for:
 - Logging into a web dashboard
 - Clicking through a startup dialog
 - Navigating to a specific tab or view
 - Typing into search fields or forms
 
-Click **Record** in the Automation section of the zone editor. MonCOM will close any active zone windows, run a countdown, then launch the zone's content — so the real startup time is naturally captured. Once the content is loaded and recording begins, switch to the launched window and perform your actions, then return to MonCOM and click **Stop** — the stop click itself is not captured. If the content needs extra time to settle, you can add a **launch delay** buffer (default 0 ms) per zone. Recorded actions include mouse clicks (left and right), keyboard input, and timing between each step. You can also manually add "type text" actions for entering text strings. All coordinates are stored relative to the zone so that sequences remain valid across resolution changes.
+Click **Record** in the zone editor's Automation section. MonCOM closes any open zones, runs a countdown, then launches the zone's content, so the real startup time is captured. Switch to the launched window, perform your actions, then return and click **Stop** (the stop click isn't recorded). Recorded actions cover mouse clicks, keystrokes, scroll, and the timing between steps. Coordinates are stored relative to the zone, so sequences stay valid across resolution changes. You can also add "type text" actions by hand, and set a per-zone launch delay when the content needs more time to load.
 
 ### Presets
 Save any layout as a named preset. Apply it later with a single click from the dashboard or presets page. MonCOM tracks how many zones each preset has and when it was created.
 
 ### Dashboard
 A central overview of your monitors and presets with quick-action buttons:
-- **New Layout** — jump straight to the editor
-- **Close All** — kill every launched zone window at once
-- **Refresh Monitors** — re-detect displays after plugging in or rearranging
+- **New Layout** opens the editor.
+- **Close All** closes every launched zone window at once.
+- **Refresh Monitors** re-detects displays after you plug in or rearrange them.
 
 ### Settings
-- **Launch on startup** — register MonCOM to start with Windows
-- **Minimize to tray** — keep it running in the background via the system tray
-- **Auto-launch preset** — automatically apply a saved preset when MonCOM starts (with a short delay to let displays stabilize)
-- **Run as administrator** — enable this only if you need to launch applications that require elevated privileges. When enabled, MonCOM must be started as administrator. MonCOM will automatically detect when an assigned executable requires elevation and warn you in the zone editor
+- **Launch on startup** registers MonCOM to start with Windows.
+- **Minimize to tray** keeps MonCOM running in the background.
+- **Auto-launch preset** applies a saved preset when MonCOM starts.
+- **Run as administrator** lets MonCOM launch apps that need elevated privileges. When it's on, MonCOM asks for administrator permission each time it starts.
 
 ### System Tray Integration
 MonCOM lives in your system tray. Double-click the icon or use the context menu to show or hide the main window without closing the app.
@@ -120,7 +128,7 @@ MonCOM lives in your system tray. Double-click the icon or use the context menu 
 
 1. Head to the [Releases](../../releases) page.
 2. Download the latest `.exe` installer or the portable build.
-3. Run the installer and follow the prompts — or extract the portable build and run `MonCOM.exe`.
+3. Run the installer and follow the prompts, or extract the portable build and run `MonCOM.exe`.
 
 ### From Source
 
@@ -152,17 +160,17 @@ Give your layout a name and click **Save Preset**. It now appears on the Dashboa
 ### 5. Record Actions (Optional)
 With a zone selected that has content assigned, scroll down to the **Automation** section:
 
-1. Click **Record** — MonCOM closes any active zone windows and starts a 3-second countdown.
+1. Click **Record**. MonCOM closes any open zones and starts a 3-second countdown.
 2. After the countdown, the zone's content launches so the real startup delay is captured.
-3. Interact with the launched content — click buttons, type text, navigate menus.
-4. Return to MonCOM and click **Stop Recording** — the stop click is automatically excluded.
+3. Interact with the launched content: click buttons, type text, navigate menus.
+4. Return to MonCOM and click **Stop Recording**. The stop click is automatically excluded.
 5. Your actions appear in a list. Use **Play** to test them, or **Clear** to start over.
 6. You can also manually add "type text" actions for entering text strings.
 
 Actions are saved with the preset and replay automatically after the zone content launches.
 
 ### 6. Automate
-In **Settings**, enable **Launch on startup** and pick your preset under **Auto-launch preset**. Your entire workspace will be set up automatically every time Windows starts — including action sequences.
+In **Settings**, enable **Launch on startup** and pick your preset under **Auto-launch preset**. Your entire workspace is set up automatically every time Windows starts, including action sequences.
 
 ---
 
@@ -301,7 +309,7 @@ Contributions are welcome! Feel free to open an issue or submit a pull request.
 
 ## License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
 
 ---
 

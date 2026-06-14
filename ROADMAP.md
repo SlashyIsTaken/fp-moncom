@@ -85,7 +85,7 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 - [x] Modifier combos (Ctrl+T) + scroll — recorder captures modifier state & wheel; player replays them.
 - [x] "Test from step N" — per-step play button.
 - [x] **DOM-aware web login for URL zones** (`webLogin` steps: `waitFor` / `fill` / `click` via injected JS against CSS selectors) — robust to page layout shifts; the headline auto-login path. Coordinate replay remains for app zones + as a fallback.
-- [ ] Already-logged-in case: partially handled (a `waitFor` step can gate on a logged-in marker); a full conditional skip overlaps with App Profiles and is deferred to **Phase 2.5**.
+- [x] Already-logged-in case: partially handled (a `waitFor` step can gate on a logged-in marker); a full conditional skip overlaps with App Profiles and is deferred to **Phase 2.5**.
 
 ---
 

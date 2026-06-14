@@ -30,16 +30,17 @@ CROP="crop=656:600:161:220"
 ffmpeg -y -ss 1.2 -t 28.6 -i video/wall.webm -vf "$CROP" \
   -c:v libx264 -crf 20 -pix_fmt yuv420p -movflags +faststart ../../assets/moncom-wall.mp4
 
-# Hero GIF — 12.6s multi-monitor build (dual → quad → 3×3 wall), palette-optimized.
-ffmpeg -y -ss 12 -t 12.6 -i video/wall.webm \
-  -vf "$CROP,fps=12,scale=600:-1:flags=lanczos,palettegen=max_colors=128:stats_mode=diff" palette.png
-ffmpeg -y -ss 12 -t 12.6 -i video/wall.webm -i palette.png \
-  -lavfi "$CROP,fps=12,scale=600:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4" \
+# Hero GIF — full layout loop, inline-sized (~380px), palette-optimized.
+# Encoded from the MP4 master (already cropped to the full cycle), so it loops cleanly.
+ffmpeg -y -i ../../assets/moncom-wall.mp4 \
+  -vf "fps=10,scale=380:-1:flags=lanczos,palettegen=max_colors=64:stats_mode=diff" palette.png
+ffmpeg -y -i ../../assets/moncom-wall.mp4 -i palette.png \
+  -lavfi "fps=10,scale=380:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5" \
   ../../assets/moncom-wall.gif
 ```
 
 ## Tuning
-- **Different layouts in the GIF:** change `-ss`/`-t` on the GIF commands. The
-  full cycle (after the ~1.2s fade-in) loops cleanly from `-ss 1.2 -t 28.6`.
+- **Smaller / larger GIF:** change `scale=380` and `fps`. At ~380px/10fps/64 colors
+  the full ~28.6s loop is ≈2.4MB. The MP4 master is the full cycle, cropped.
 - **Smaller file:** drop `fps` to 10 or `scale` to 520.
 - **Crop:** `verify.mjs` prints the canvas bounding box if the scene layout changes.
