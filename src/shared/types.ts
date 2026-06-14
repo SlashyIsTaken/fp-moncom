@@ -57,7 +57,14 @@ export interface AutomationAction {
  * page layout shifts, unlike coordinate-based input replay.
  */
 export interface WebLoginStep {
-  action: 'waitFor' | 'fill' | 'click';
+  /**
+   * - `waitFor`  — wait until the selector exists, then continue.
+   * - `skipIfPresent` — if the selector already exists, stop (we're already
+   *   logged in). Since web login runs on every launch, this also re-logs-in
+   *   automatically when a session has expired (the marker won't be present).
+   * - `fill` / `click` — type into / click the selector.
+   */
+  action: 'waitFor' | 'skipIfPresent' | 'fill' | 'click';
   /** CSS selector the step targets. */
   selector: string;
   /** Value to type, for `fill`. */

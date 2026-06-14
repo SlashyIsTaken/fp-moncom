@@ -580,7 +580,7 @@ function WebLoginPanel({ steps, onChange }: { steps: WebLoginStep[]; onChange: (
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <h4 className="text-[10px] text-text-muted uppercase tracking-widest font-medium">Web auto-login</h4>
-          <Tooltip text="For website zones, drive login by CSS selector instead of coordinate clicks — robust to page layout changes. Steps run after the page loads: 'Wait for' waits until an element appears, 'Fill' types into a field, 'Click' presses a button. Tip: right-click an element in the page and Inspect to find its selector." />
+          <Tooltip text="For website zones, drive login by CSS selector instead of coordinate clicks — robust to page layout changes. Steps run after the page loads (and on every launch): 'Wait for' waits until an element appears, 'Skip if present' stops the sequence when a logged-in marker is already there (so it skips when logged in and re-logs-in when the session expired), 'Fill' types into a field, 'Click' presses a button. Tip: right-click an element in the page and Inspect to find its selector." />
         </div>
         {steps.length > 0 && (
           <span className="text-[10px] text-text-secondary">{steps.length} step{steps.length !== 1 ? 's' : ''}</span>
@@ -603,6 +603,7 @@ function WebLoginPanel({ steps, onChange }: { steps: WebLoginStep[]; onChange: (
                 className="px-1.5 py-1 bg-bg-dark border border-border rounded text-[10px] text-text-secondary focus:outline-none focus:border-commander/60"
               >
                 <option value="waitFor">Wait for</option>
+                <option value="skipIfPresent">Skip if present</option>
                 <option value="fill">Fill</option>
                 <option value="click">Click</option>
               </select>

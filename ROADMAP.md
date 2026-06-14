@@ -95,14 +95,14 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 
 **Done when:** A picky app is brought up unattended by a profile that acks its warning dialog, waits through its auto-login window, and positions the *final* window — and that profile is a JSON file a user created in the UI, with the bundled DSS example shipped as data, not code.
 
-**Status: engine complete & verified.** Schema + storage + runner are in, builds green, and the bundled DSS example loads and matches by exe. The launch path runs a matching profile instead of the default window-finder. Remaining: the authoring UI, recording-authors-profiles, and the conditional layer.
+**Status: complete.** Schema + storage + runner + authoring UI are all in and build green; the bundled DSS example loads and matches by exe; exe matching is forgiving (paths/casing/extension all normalized via `normalizeExe`); and the conditional already-logged-in layer landed. The launch path runs a matching profile instead of the default window-finder.
 
 - [x] Profile schema (`AppProfile` / `WindowMatch` / `ProfileStep` / `ProfileAction` in `shared/types.ts`): a window matcher (`exe` / `titleContains` / `className`) + ordered steps (`waitFor` → `do`(click/key/wait) → `waitClose` / `position`). One JSON file per profile.
 - [x] Generic profile runner (`profile-runner.ts`) on the Phase 1 `waitForWindow` primitive + native input — replaces `resolveTargetWindow` in `launchAppZone` when `findProfileForExe` matches; default path stays as fallback.
 - [x] Profiles load from `userData/moncom-data/profiles/` (user) + a read-only bundled `examples/profiles/` (shipped via `extraResources`). **DSS ships as `examples/profiles/dss-client.json`** — data, not privileged code.
 - [x] UI to create / edit a profile — a dedicated **App Profiles** page (sidebar) with a structured step/action editor (match exe, per-step window matcher + flags + `do` actions), bundled "Example" badge, duplicate, delete, and an "open profiles folder" shortcut. _Optional polish: a "this app has a profile" hint in the zone editor._
-- [ ] Extend recording (Phase 2) to capture *which window* each action targeted, so recording a stubborn app authors a profile automatically.
-- [ ] **Conditional / already-logged-in handling** (requested): on every launch, skip login when a "logged-in" marker selector is already present, and re-run it when a session-expired marker appears. Applies to both `webLogin` (URL zones) and app profiles — `webLogin` already runs on every launch, so this is the conditional layer on top.
+- [x] Capture *which window* each step targets — a **"Detect open windows"** picker in the step editor fills a step's `exe` + `className` from any live window (the hard part of authoring). _Full input-event recording → synthesized profile is deferred to post-1.0 (it's a poor fit for wait/keypress flows like DSS, and the structured editor + detect-windows already make authoring practical)._
+- [x] **Conditional / already-logged-in handling**: web login gained a `skipIfPresent` step — if a logged-in marker selector is already present, it stops (skips when logged in; re-logs-in on session expiry, since web login runs on every launch). App profiles get the same effect from `optional` steps (login window doesn't appear → recipe continues).
 
 ---
 
@@ -179,6 +179,7 @@ Not blockers, and not to be started before v1.0.0 ships. Listed so contributors 
 - **Scenes:** switch presets automatically on a trigger (time of day, monitor count, focused app).
 - **Conditional automation:** branch a replay on what's on screen (skip login if already authenticated).
 - **Preset templates gallery:** shareable community walls for common ops stacks.
+- **Record-to-profile:** record an app's launch flow (clicks + the window each one hit) and synthesize an App Profile automatically. Deferred from Phase 2.5 — the structured editor + "Detect open windows" cover authoring today, and recording fits click-heavy logins better than wait/keypress flows like DSS.
 
 ---
 

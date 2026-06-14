@@ -20,7 +20,7 @@ export interface MonCOMAPI {
   launchZone(zone: Zone, monitors: MonitorInfo[]): Promise<LaunchZoneResult>;
   moveWindow(title: string, x: number, y: number, w: number, h: number): Promise<boolean>;
   closeAllZones(): Promise<CloseAllZonesReport>;
-  findWindows(): Promise<{ title: string; pid: number }[]>;
+  findWindows(): Promise<{ title: string; pid: number; exe: string; className: string }[]>;
   getPresets(): Promise<Preset[]>;
   savePreset(preset: Preset): Promise<Preset[]>;
   deletePreset(id: string): Promise<Preset[]>;

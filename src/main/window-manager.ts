@@ -85,7 +85,13 @@ async function runWebLogin(wc: Electron.WebContents, steps: WebLoginStep[]): Pro
   for (const step of steps) {
     const sel = JSON.stringify(step.selector);
     try {
-      if (step.action === 'waitFor') {
+      if (step.action === 'skipIfPresent') {
+        const present = await wc.executeJavaScript(`!!document.querySelector(${sel})`, true).catch(() => false);
+        if (present) {
+          console.log(`[MonCOM] webLogin: logged-in marker present (${step.selector}), skipping remaining steps`);
+          return;
+        }
+      } else if (step.action === 'waitFor') {
         const ok = await waitForSelector(wc, step.selector);
         if (!ok) console.warn(`[MonCOM] webLogin waitFor timed out: ${step.selector}`);
       } else if (step.action === 'fill') {
@@ -490,8 +496,8 @@ async function closeAllZones(): Promise<CloseAllZonesReport> {
 /**
  * Get list of open windows with titles (used by the FIND_WINDOWS IPC).
  */
-function findWindows(): { title: string; pid: number }[] {
-  return enumWindows().map((wi) => ({ title: wi.title, pid: wi.pid }));
+function findWindows(): { title: string; pid: number; exe: string; className: string }[] {
+  return enumWindows().map((wi) => ({ title: wi.title, pid: wi.pid, exe: wi.processName, className: wi.className }));
 }
 
 function hasLaunchedWindows(): boolean {

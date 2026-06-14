@@ -120,6 +120,9 @@ function ProfileEditor({ draft, setDraft, onSave, onCancel, isNew, status }: {
   isNew: boolean;
   status: string | null;
 }) {
+  const [detectStep, setDetectStep] = useState<number | null>(null);
+  const [openWindows, setOpenWindows] = useState<{ title: string; pid: number; exe: string; className: string }[]>([]);
+
   const setStep = (i: number, patch: Partial<ProfileStep>) =>
     setDraft({ ...draft, steps: draft.steps.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) });
   const setMatch = (i: number, patch: Partial<ProfileStep['waitFor']>) =>
@@ -141,6 +144,17 @@ function ProfileEditor({ draft, setDraft, onSave, onCancel, isNew, status }: {
   const browseExe = async () => {
     const picked = await window.moncom?.pickExecutable();
     if (picked) setDraft({ ...draft, match: { ...draft.match, exe: normalizeExe(picked) } });
+  };
+
+  const detect = async (i: number) => {
+    if (detectStep === i) { setDetectStep(null); return; }
+    const wins = (await window.moncom?.findWindows()) ?? [];
+    setOpenWindows(wins.filter((w) => w.title && !/^MonCOM/i.test(w.title)));
+    setDetectStep(i);
+  };
+  const applyWindow = (i: number, w: { exe: string; className: string }) => {
+    setMatch(i, { exe: w.exe || undefined, className: w.className || undefined });
+    setDetectStep(null);
   };
 
   return (
@@ -206,6 +220,23 @@ function ProfileEditor({ draft, setDraft, onSave, onCancel, isNew, status }: {
                 className="px-2 py-1.5 bg-bg-dark border border-border rounded text-[11px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-commander/60" />
               <input value={step.waitFor.className || ''} onChange={(e) => setMatch(i, { className: e.target.value || undefined })} placeholder="class"
                 className="px-2 py-1.5 bg-bg-dark border border-border rounded text-[11px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-commander/60" />
+            </div>
+
+            <div className="mb-2.5">
+              <button onClick={() => detect(i)} className="text-[11px] text-commander hover:text-commander-core transition-colors">
+                {detectStep === i ? '− Hide open windows' : '⌖ Detect open windows'}
+              </button>
+              {detectStep === i && (
+                <div className="mt-1.5 max-h-44 overflow-y-auto space-y-0.5 border border-border rounded-lg p-1.5 bg-bg-dark">
+                  {openWindows.length === 0 && <p className="text-[10px] text-text-muted px-1 py-0.5">No titled windows found. Launch the app first, then detect.</p>}
+                  {openWindows.map((w, wi) => (
+                    <button key={wi} onClick={() => applyWindow(i, w)} className="w-full text-left px-2 py-1 rounded hover:bg-bg-steel/40 transition-colors" title="Fill this step's exe + class from this window">
+                      <div className="text-[11px] text-text-secondary truncate">{w.title || '(untitled)'}</div>
+                      <div className="text-[9px] text-text-muted truncate">exe: {w.exe || '—'} · class: {w.className || '—'}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-2.5 text-[11px] text-text-secondary">
