@@ -112,11 +112,11 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 
 **Done when:** A tagged release produces a signed (or clearly-explained) installer and portable build; a non-developer downloads it, runs it, and builds a working wall without cloning or building anything.
 
-- [ ] GitHub Actions workflow that builds the NSIS installer and portable `.exe` on every tag.
-- [ ] Proper Windows icon set (`.ico` with 16/24/32/48/64/128/256px) — only a single PNG ships today.
-- [ ] Code-sign the installer, or at minimum ship documented SmartScreen guidance plus published checksums so the warning has an explanation.
-- [ ] Auto-updater (`electron-updater`) so patches don't require a manual re-download.
-- [ ] `CHANGELOG.md` and enforced semver from the first tagged release.
+- [x] GitHub Actions workflow that builds the NSIS installer and portable `.exe` on every tag.
+- [x] Proper Windows icon set (`.ico` with 16/24/32/48/64/128/256px) — only a single PNG ships today.
+- [x] Code-sign the installer, or at minimum ship documented SmartScreen guidance plus published checksums so the warning has an explanation.
+- [x] Auto-updater (`electron-updater`) so patches don't require a manual re-download.
+- [x] `CHANGELOG.md` and enforced semver from the first tagged release.
 
 ---
 
@@ -126,10 +126,10 @@ Phases are ordered by dependency, not by appetite — each builds on the last. E
 
 **Done when:** A bound global hotkey applies its preset from inside any other app, conflicts with existing shortcuts are detected and surfaced, and `moncom.exe --apply "<preset>"` brings a wall up from the command line.
 
-- [ ] Wire `globalShortcut` registration in the main process (the `hotkeys` setting already exists, unused).
-- [ ] UI to bind a hotkey to a specific preset; persist in `settings.json` and re-register on startup.
-- [ ] Detect and surface conflicts with already-registered shortcuts.
-- [ ] CLI flag to apply a preset by name, so MonCOM can be wired into other automation/schedulers.
+- [x] Wire `globalShortcut` registration in the main process (the `hotkeys` setting already exists, unused).
+- [x] UI to bind a hotkey to a specific preset; persist in `settings.json` and re-register on startup.
+- [x] Detect and surface conflicts with already-registered shortcuts.
+- [x] CLI flag to apply a preset by name, so MonCOM can be wired into other automation/schedulers.
 
 ---
 
