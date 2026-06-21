@@ -26,6 +26,7 @@ export interface MonCOMAPI {
   deletePreset(id: string): Promise<Preset[]>;
   getSettings(): Promise<AppSettings>;
   saveSettings(settings: AppSettings): Promise<AppSettings>;
+  registerHotkeys(): Promise<{ failed: { presetId: string; accelerator: string }[] }>;
   applyPreset(preset: Preset): Promise<ApplyPresetResult>;
   pickExecutable(): Promise<string | null>;
   startRecording(zone: Zone, monitors: MonitorInfo[]): Promise<boolean>;

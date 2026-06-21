@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('moncom', {
   getSettings: () => ipcRenderer.invoke(IPC.GET_SETTINGS),
   saveSettings: (settings: any) => ipcRenderer.invoke(IPC.SAVE_SETTINGS, settings),
 
+  // Global hotkeys: re-register from saved settings, returns { failed: [...] }
+  registerHotkeys: () => ipcRenderer.invoke(IPC.REGISTER_HOTKEYS),
+
   // Apply preset (launch all zones)
   applyPreset: (preset: any) => ipcRenderer.invoke(IPC.APPLY_PRESET, preset),
 

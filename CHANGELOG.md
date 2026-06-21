@@ -16,6 +16,14 @@ called out explicitly when they happen.
   `.exe` on every `v*` tag, publishes SHA256 checksums, and drafts a GitHub release.
 - Published SHA256 checksums and SmartScreen guidance so unsigned downloads can be
   verified and explained.
+- Global hotkeys: bind a keyboard shortcut to any preset on the Presets page and
+  apply that wall from inside any other app. Shortcuts that are already taken are
+  flagged in the UI.
+- Command line: `moncom.exe --apply "<preset>"` brings a wall up by name, for wiring
+  MonCOM into schedulers and other automation. Launched this way, MonCOM starts in
+  the tray instead of opening its window.
+- Single-instance: a second launch hands its command to the running MonCOM and exits,
+  instead of stacking a second tray icon.
 
 ### Fixed
 - Packaged builds now load the native Win32 layer correctly — koffi and its native

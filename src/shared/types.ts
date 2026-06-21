@@ -196,6 +196,7 @@ export interface AppSettings {
   autoLaunchPresetId: string | null;
   /** Launch MonCOM with administrator privileges (needed for apps that require elevation) */
   runAsAdmin: boolean;
+  /** Global shortcut bindings, keyed by preset id -> Electron accelerator (e.g. "CommandOrControl+Alt+1"). */
   hotkeys: Record<string, string>;
 }
 
@@ -210,6 +211,8 @@ export const IPC = {
   DELETE_PRESET: 'delete-preset',
   GET_SETTINGS: 'get-settings',
   SAVE_SETTINGS: 'save-settings',
+  /** Re-read settings.hotkeys and (re)register global shortcuts. Returns conflicts. */
+  REGISTER_HOTKEYS: 'register-hotkeys',
   MOVE_WINDOW: 'move-window',
   FIND_WINDOWS: 'find-windows',
   START_RECORDING: 'start-recording',

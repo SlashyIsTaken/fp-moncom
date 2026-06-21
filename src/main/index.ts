@@ -7,6 +7,7 @@ import { registerProfileHandlers } from './profile-store';
 import { getStableMonitors } from './monitors';
 import { startRecording, stopRecording, playActions } from './automation-manager';
 import { initAutoUpdater } from './updater';
+import { registerHotkeys, registerHotkeyHandlers } from './hotkeys';
 import type { MonitorInfo } from '../shared/types';
 import { IPC } from '../shared/types';
 
@@ -91,7 +92,7 @@ function identifyMonitors(): void {
   }
 }
 
-function createWindow() {
+function createWindow(startHidden = false) {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -100,6 +101,8 @@ function createWindow() {
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#0E1116',
+    // Launched via `--apply` to bring up a wall: stay in the tray, don't pop the UI.
+    show: !startHidden,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -149,7 +152,55 @@ function getMonitors(): MonitorInfo[] {
   return getStableMonitors(screen);
 }
 
+/** Extract the value of `--apply <name>` / `--apply=<name>` from an argv array, if present. */
+function getApplyArg(argv: string[]): string | null {
+  const idx = argv.findIndex((a) => a === '--apply' || a.startsWith('--apply='));
+  if (idx === -1) return null;
+  const arg = argv[idx];
+  const name = arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : argv[idx + 1];
+  return name ? name.trim() : null;
+}
+
+/** Apply a saved preset by name (case-insensitive). Used by the --apply CLI flag. */
+function applyPresetByName(name: string): void {
+  const target = name.trim().toLowerCase();
+  const preset = loadPresets().find((p) => p.name.trim().toLowerCase() === target);
+  if (!preset) {
+    console.error(`[MonCOM] --apply: no preset named "${name}"`);
+    return;
+  }
+  applyPresetFromMain(preset, screen).catch((err) =>
+    console.error('[MonCOM] --apply failed:', err),
+  );
+}
+
+/** Run an --apply request from an argv array (startup or a forwarded second instance). */
+function handleCliApply(argv: string[]): void {
+  const name = getApplyArg(argv);
+  if (name) applyPresetByName(name);
+}
+
+// Single-instance: only one MonCOM owns the workspace. A second launch (e.g.
+// `moncom.exe --apply "Trading Wall"`) hands its argv to the running instance via
+// the 'second-instance' event and then exits, instead of stacking a second tray.
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    handleCliApply(argv);
+  });
+}
+
 app.whenReady().then(() => {
+  // A second instance is on its way out; don't build a UI for it.
+  if (!gotTheLock) return;
+
   // Self-elevate at startup when "Run as administrator" is enabled, so apps that
   // require elevation launch directly (inheriting our token) instead of prompting
   // UAC on every launch. Guarded against a relaunch loop: the elevated instance
@@ -168,6 +219,9 @@ app.whenReady().then(() => {
         // PowerShell exit code reflects the outcome: 0 = elevated instance launched;
         // non-zero = user declined or it failed, in which case we fall through and
         // open unelevated rather than silently doing nothing.
+        // Release the single-instance lock before the relaunch so the elevated
+        // instance is guaranteed to find it free (it boots while we're still here).
+        app.releaseSingleInstanceLock();
         const result = spawnSync('powershell.exe', ['-NoProfile', '-Command',
           `Start-Process -FilePath '${relaunchTarget.replace(/'/g, "''")}' -Verb RunAs`],
           { windowsHide: true });
@@ -175,6 +229,8 @@ app.whenReady().then(() => {
           app.exit(0);
           return;
         }
+        // Declined or failed: re-acquire the lock and continue unelevated.
+        app.requestSingleInstanceLock();
         console.error('[MonCOM] Elevation declined or failed, continuing unelevated:', result.error);
       }
     } catch (e) {
@@ -182,9 +238,10 @@ app.whenReady().then(() => {
     }
   }
 
-  createWindow();
+  createWindow(getApplyArg(process.argv) !== null);
   createTray();
   initAutoUpdater();
+  registerHotkeys();
 
   // Monitor detection
   ipcMain.handle(IPC.GET_MONITORS, () => getMonitors());
@@ -224,6 +281,7 @@ app.whenReady().then(() => {
   registerWindowHandlers(ipcMain);
   registerPresetHandlers(ipcMain);
   registerProfileHandlers(ipcMain);
+  registerHotkeyHandlers(ipcMain);
 
   // Automation: recording & playback
   ipcMain.handle(IPC.START_RECORDING, (_event, zone, monitors) => {
@@ -263,6 +321,9 @@ app.whenReady().then(() => {
   } catch (e) {
     console.error('[MonCOM] Auto-launch failed:', e);
   }
+
+  // Apply a preset if this instance was launched with `--apply "<preset>"`.
+  handleCliApply(process.argv);
 });
 
 app.on('before-quit', () => {

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Play, Trash2, Clock, Layers, Bookmark, Pencil } from 'lucide-react';
-import type { Preset } from '../../shared/types';
+import type { AppSettings, Preset } from '../../shared/types';
 import type { Page } from '../App';
 import { formatApplyResult } from '../applyResultMessage';
+import { HotkeyField } from '../components/HotkeyField';
 
 interface PresetsPageProps {
   onNavigate: (page: Page) => void;
@@ -14,10 +15,36 @@ export function PresetsPage({ onNavigate, onEditPreset }: PresetsPageProps) {
   const [applying, setApplying] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [conflicts, setConflicts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     window.moncom?.getPresets().then(setPresets);
+    window.moncom?.getSettings().then(setSettings);
+    // Surface any shortcuts that couldn't bind (taken by Windows or another app).
+    window.moncom?.registerHotkeys().then((report) =>
+      setConflicts(new Set((report?.failed || []).map((f) => f.presetId))),
+    );
   }, []);
+
+  const handleSetHotkey = async (presetId: string, accelerator: string | null) => {
+    if (!settings) return;
+    const hotkeys = { ...settings.hotkeys };
+    if (accelerator) {
+      // An accelerator maps to exactly one preset: drop it from any other binding.
+      for (const id of Object.keys(hotkeys)) {
+        if (hotkeys[id] === accelerator) delete hotkeys[id];
+      }
+      hotkeys[presetId] = accelerator;
+    } else {
+      delete hotkeys[presetId];
+    }
+    const updated = { ...settings, hotkeys };
+    setSettings(updated);
+    await window.moncom?.saveSettings(updated);
+    const report = await window.moncom?.registerHotkeys();
+    setConflicts(new Set((report?.failed || []).map((f) => f.presetId)));
+  };
 
   const handleApply = async (preset: Preset) => {
     setApplying(preset.id);
@@ -132,6 +159,16 @@ export function PresetsPage({ onNavigate, onEditPreset }: PresetsPageProps) {
                     title={zone.content?.label || 'Empty'}
                   />
                 ))}
+              </div>
+
+              {/* Global shortcut: apply this preset from anywhere */}
+              <div className="flex items-center justify-between gap-3 mt-4 pt-4 border-t border-border">
+                <span className="text-xs text-text-secondary">Global shortcut</span>
+                <HotkeyField
+                  value={settings?.hotkeys?.[preset.id]}
+                  conflict={conflicts.has(preset.id)}
+                  onChange={(accel) => handleSetHotkey(preset.id, accel)}
+                />
               </div>
             </div>
           ))}
