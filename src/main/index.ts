@@ -6,6 +6,7 @@ import { registerPresetHandlers, loadSettings, loadPresets } from './preset-stor
 import { registerProfileHandlers } from './profile-store';
 import { getStableMonitors } from './monitors';
 import { startRecording, stopRecording, playActions } from './automation-manager';
+import { initAutoUpdater } from './updater';
 import type { MonitorInfo } from '../shared/types';
 import { IPC } from '../shared/types';
 
@@ -183,6 +184,7 @@ app.whenReady().then(() => {
 
   createWindow();
   createTray();
+  initAutoUpdater();
 
   // Monitor detection
   ipcMain.handle(IPC.GET_MONITORS, () => getMonitors());

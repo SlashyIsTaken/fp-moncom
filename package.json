@@ -1,10 +1,14 @@
 {
   "name": "moncom",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "MonCOM - Monitor Commander by Flarepoint",
   "main": "dist/main/index.js",
   "author": "Flarepoint",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SlashyIsTaken/fp-moncom.git"
+  },
   "scripts": {
     "dev:renderer": "vite",
     "dev:main": "node esbuild.main.mjs && electron .",
@@ -28,9 +32,20 @@
       ],
       "icon": "build/icon.ico"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "SlashyIsTaken",
+        "repo": "fp-moncom"
+      }
+    ],
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
     },
     "files": [
       "dist/**/*",
@@ -50,6 +65,7 @@
   },
   "dependencies": {
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.8.9",
     "koffi": "^3.0.2"
   },
   "devDependencies": {

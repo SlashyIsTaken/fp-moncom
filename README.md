@@ -127,8 +127,26 @@ MonCOM lives in your system tray. Double-click the icon or use the context menu 
 ### From a Release
 
 1. Head to the [Releases](../../releases) page.
-2. Download the latest `.exe` installer or the portable build.
-3. Run the installer and follow the prompts, or extract the portable build and run `MonCOM.exe`.
+2. Download the latest build:
+   - **MonCOM-Setup-`<version>`.exe** is the installer. Pick this one if you want MonCOM in your Start menu and automatic updates.
+   - **MonCOM-Portable-`<version>`.exe** is the portable build. It runs as a single file with no install, but it does not auto-update.
+3. Run the installer and follow the prompts, or just run the portable `.exe`.
+
+#### About the SmartScreen warning
+
+MonCOM is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC" the first time you run it. That is expected for an unsigned app, not a sign that anything is wrong. To run it, click **More info**, then **Run anyway**.
+
+A code-signing certificate is on the roadmap; until then, verifying the checksum (below) is the way to confirm your download is genuine.
+
+#### Verifying your download
+
+Every release publishes a `checksums.txt` with the SHA256 hash of each file. To check the file you downloaded matches:
+
+```powershell
+Get-FileHash .\MonCOM-Setup-<version>.exe -Algorithm SHA256
+```
+
+Compare the printed hash against the matching line in `checksums.txt`. If they match, the download is intact.
 
 ### From Source
 

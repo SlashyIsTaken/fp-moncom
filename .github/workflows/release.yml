@@ -1,0 +1,98 @@
+name: Release
+
+# Builds the Windows installer + portable on every version tag and drafts a
+# GitHub release with the artifacts, an auto-update feed (latest.yml), and
+# SHA256 checksums. The release is created as a DRAFT so a human reviews it
+# before it goes public — the auto-updater only sees published, non-draft
+# releases, so publishing the draft is what ships an update to users.
+#
+# A manual run (workflow_dispatch) builds and uploads artifacts as a CI check
+# but does not create a release (there's no tag to attach it to).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (renderer + main)
+        run: npm run build
+
+      - name: Package (NSIS + portable)
+        # --publish never: this workflow owns the release step (below), not
+        # electron-builder. The build is unsigned by design; see the README's
+        # SmartScreen section. Add signing here later if a certificate lands.
+        run: npx electron-builder --win --publish never
+
+      - name: Generate checksums and release notes
+        shell: pwsh
+        run: |
+          $exes = Get-ChildItem release -Filter *.exe
+          $lines = foreach ($f in $exes) {
+            "$((Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower())  $($f.Name)"
+          }
+          $lines | Set-Content release/checksums.txt -Encoding ascii
+          Get-Content release/checksums.txt
+
+          $ver = $env:GITHUB_REF_NAME.TrimStart('v')
+          $notes = @()
+          $notes += "MonCOM $env:GITHUB_REF_NAME"
+          $notes += ''
+          $notes += '## Downloads'
+          $notes += "- **MonCOM-Setup-$ver.exe** is the installer (recommended; supports auto-update)."
+          $notes += "- **MonCOM-Portable-$ver.exe** is the portable single executable (no install; no auto-update)."
+          $notes += ''
+          $notes += '## A note on the SmartScreen warning'
+          $notes += 'These builds are not code-signed, so Windows SmartScreen may show "Windows protected your PC". This is expected for an unsigned app, not a sign of anything wrong. To run it, click More info then Run anyway.'
+          $notes += ''
+          $notes += '## Verifying your download'
+          $notes += 'Compare the SHA256 hash of your download against the matching line:'
+          $notes += ''
+          $notes += '```'
+          $notes += $lines
+          $notes += '```'
+          $notes += ''
+          $notes += 'PowerShell: `Get-FileHash .\MonCOM-Setup-' + $ver + '.exe -Algorithm SHA256`'
+          $notes | Set-Content release/RELEASE_NOTES.md -Encoding utf8
+
+      - name: Create draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: MonCOM ${{ github.ref_name }}
+          body_path: release/RELEASE_NOTES.md
+          files: |
+            release/*.exe
+            release/latest.yml
+            release/*.blockmap
+            release/checksums.txt
+
+      - name: Upload artifacts (manual runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: moncom-windows
+          path: |
+            release/*.exe
+            release/latest.yml
+            release/checksums.txt
