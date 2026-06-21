@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, nativeImage, dialog } from 'electron';
 import * as path from 'path';
-import { execSync, spawn } from 'child_process';
+import { execSync, spawn, spawnSync } from 'child_process';
 import { registerWindowHandlers, applyPresetFromMain } from './window-manager';
 import { registerPresetHandlers, loadSettings, loadPresets } from './preset-store';
 import { registerProfileHandlers } from './profile-store';
@@ -11,6 +11,8 @@ import { IPC } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+// Set once a real quit is underway, so the close handler stops intercepting.
+let isQuitting = false;
 
 const isDev = !app.isPackaged;
 
@@ -114,9 +116,12 @@ function createWindow() {
   }
 
   mainWindow.on('close', (e) => {
-    // Minimize to tray instead of closing
-    e.preventDefault();
-    mainWindow?.hide();
+    // Hide to tray only when the setting is on (and not during a real quit).
+    // With "minimize to tray" off, let the close proceed so the app exits.
+    if (!isQuitting && loadSettings().minimizeToTray) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -151,11 +156,25 @@ app.whenReady().then(() => {
   if (!isDev) {
     try {
       if (loadSettings().runAsAdmin && !isProcessElevated()) {
-        spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-          `Start-Process -FilePath '${process.execPath.replace(/'/g, "''")}' -Verb RunAs`],
-          { detached: true, stdio: 'ignore', windowsHide: true }).unref();
-        app.exit(0);
-        return;
+        // For a portable build, process.execPath is a temp-extracted copy that the
+        // portable wrapper deletes as soon as this process exits — so relaunching it
+        // would target a vanished exe. electron-builder exposes the real portable
+        // exe via PORTABLE_EXECUTABLE_FILE; relaunch that so it re-extracts elevated.
+        const relaunchTarget = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+        // Use spawnSync (not detached spawn + immediate app.exit): a fire-and-forget
+        // spawn gets torn down by the hard exit before it can raise the UAC prompt.
+        // Blocking here keeps this process alive through the consent dialog. The
+        // PowerShell exit code reflects the outcome: 0 = elevated instance launched;
+        // non-zero = user declined or it failed, in which case we fall through and
+        // open unelevated rather than silently doing nothing.
+        const result = spawnSync('powershell.exe', ['-NoProfile', '-Command',
+          `Start-Process -FilePath '${relaunchTarget.replace(/'/g, "''")}' -Verb RunAs`],
+          { windowsHide: true });
+        if (result.status === 0) {
+          app.exit(0);
+          return;
+        }
+        console.error('[MonCOM] Elevation declined or failed, continuing unelevated:', result.error);
       }
     } catch (e) {
       console.error('[MonCOM] Elevation relaunch failed, continuing unelevated:', e);
@@ -174,7 +193,9 @@ app.whenReady().then(() => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize();
     else mainWindow?.maximize();
   });
-  ipcMain.on('window-close', () => mainWindow?.hide());
+  // Route through close() so the 'close' handler decides hide-to-tray vs quit
+  // based on the minimizeToTray setting, instead of always hiding.
+  ipcMain.on('window-close', () => mainWindow?.close());
 
   // Open external URLs in default browser
   ipcMain.handle('open-external', (_event, url: string) => {
@@ -240,6 +261,10 @@ app.whenReady().then(() => {
   } catch (e) {
     console.error('[MonCOM] Auto-launch failed:', e);
   }
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 app.on('window-all-closed', () => {
